@@ -908,34 +908,6 @@ struct Session::Impl {
         return out;
     }
 
-    // Display-referred float RGBA of a slot's current frame, as the viewer shows it.
-    std::vector<float> scopeImage(int s, int maxWidth, int& w, int& h) {
-        w = h = 0;
-        if (s < 0 || s > 1 || !slots[s].loaded) return {};
-        const int lf = layerFrame(s, ctrl.current());
-        FramePtr f = inRange(s, lf) ? lookup(s, lf) : nullptr;
-        if (!f || f->missing) return {};
-        std::vector<float> px = downsampleRgba(*f, maxWidth, w, h);
-        const float gain = std::exp2(exposureStops);
-        for (size_t i = 0; i < px.size(); ++i)
-            if (i % 4 != 3) px[i] *= gain;
-        if (slots[s].mode() == LayerMode::Color) {
-            try {
-                ocio.toDisplayCpu(slots[s].inputSpace, px.data(), w, h);
-            } catch (...) {
-            }
-        }
-        return px;
-    }
-
-    json histogramJson(int s, int bins) {
-        int w, h;
-        std::vector<float> px = scopeImage(s, 512, w, h);
-        if (px.empty()) return nullptr;
-        const Histogram hg = histogram(px.data(), w, h, bins);
-        return {{"bins", hg.bins}, {"r", hg.r}, {"g", hg.g}, {"b", hg.b}, {"luma", hg.luma}};
-    }
-
     void syncLockedAov(int changedSlot) {
         if (!lockAov) return;
         const Slot& src = slots[changedSlot];
@@ -1004,7 +976,6 @@ struct Session::Impl {
             regionActive = false;
             return {{"regionActive", false}};
         }
-        if (cmd == "histogram") return {{"histogram", histogramJson(slotArg(), j.value("bins", 256))}};
         if (cmd == "metadata") {
             const int s = slotArg();
             json rows = json::array();
@@ -1227,7 +1198,7 @@ struct Session::Impl {
             if (!ocio.load(j.value("path", ""), &err)) throw std::runtime_error(err);
             ocioError.clear();
             for (int s = 0; s < 2; ++s)
-                if (slots[s].loaded && !ocio.hasColorSpace(slots[s].inputSpace))
+                if (slots[s].loaded)  // new workflow: each layer starts in its linear working space
                     slots[s].inputSpace = ocio.guessInputSpace(slots[s].seq->files.front().second);
             return ocioJson();
         } else {
@@ -1305,15 +1276,6 @@ bool Session::canvasSize(int& w, int& h) {
     const Layout L = impl_->layout(1000, 1000, ViewState{});
     w = std::max(1, L.canvasW);
     h = std::max(1, L.canvasH);
-    return true;
-}
-
-bool Session::waveform(int slot, int outW, int outH, std::vector<uint8_t>& rgba) {
-    std::lock_guard lock(impl_->m);
-    int w, h;
-    std::vector<float> px = impl_->scopeImage(slot, 512, w, h);
-    if (px.empty()) return false;
-    rgba = exrc::waveform(px.data(), w, h, outW, outH);
     return true;
 }
 

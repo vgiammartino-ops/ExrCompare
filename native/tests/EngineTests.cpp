@@ -325,9 +325,4 @@ TEST_CASE("rebuild sum / difference and contact sheet") {
     auto rs = regionStats(*beauty, 0, 0, 1, 1);
     CHECK_EQ(rs.count, 4);
     CHECK_NEAR(rs.mean[0], 1.0, 1e-9);
-    std::vector<float> img(4 * 4, 0.5f);
-    auto hg = histogram(img.data(), 2, 2, 11);
-    CHECK_EQ(hg.r[5], 4u);
-    auto wf = waveform(img.data(), 2, 2, 8, 8);
-    CHECK_EQ(wf.size(), size_t(8 * 8 * 4));
 }

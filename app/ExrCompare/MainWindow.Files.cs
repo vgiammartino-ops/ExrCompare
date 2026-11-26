@@ -15,7 +15,7 @@ using Windows.Storage.Pickers;
 
 namespace ExrCompare;
 
-/// <summary>Opening sequences, drag and drop, sessions, snapshots, notes export, OCIO config files.</summary>
+/// <summary>Opening sequences, drag and drop, sessions, snapshots, OCIO config files.</summary>
 public sealed partial class MainWindow
 {
     private void InitPicker(object picker) =>
@@ -79,7 +79,7 @@ public sealed partial class MainWindow
 
     // ----------------------------------------------------------- command line --
     /// <summary>
-    /// ExrCompare.exe [pathA] [pathB] [--compare mode] [--snapshot file.png] [--quit]
+    /// ExrCompare.exe [pathA] [pathB] [--workflow aces|legacy] [--compare mode] [--snapshot file.png] [--quit]
     /// Paths open into A then B. With --quit the app writes &lt;snapshot&gt;.json (engine and
     /// renderer status, for automated tests) and exits.
     /// </summary>
@@ -87,21 +87,24 @@ public sealed partial class MainWindow
     {
         var args = Environment.GetCommandLineArgs().Skip(1).ToList();
         if (args.Count == 0) return;
-        string? compare = null, snapshot = null;
+        string? compare = null, snapshot = null, workflow = null;
         bool quit = false;
-        int slot = 0;
+        var paths = new List<string>();
         for (int i = 0; i < args.Count; i++)
         {
             switch (args[i])
             {
                 case "--compare" when i + 1 < args.Count: compare = args[++i]; break;
                 case "--snapshot" when i + 1 < args.Count: snapshot = args[++i]; break;
+                case "--workflow" when i + 1 < args.Count: workflow = args[++i]; break;
                 case "--quit": quit = true; break;
                 default:
-                    if (slot < 2 && (File.Exists(args[i]) || Directory.Exists(args[i]))) OpenPath(slot++, args[i]);
+                    if (paths.Count < 2 && (File.Exists(args[i]) || Directory.Exists(args[i]))) paths.Add(args[i]);
                     break;
             }
         }
+        if (workflow is not null) SetWorkflow(workflow);  // before opening, so input spaces follow it
+        for (int s = 0; s < paths.Count; s++) OpenPath(s, paths[s]);
         if (compare is not null) SetCompare(compare);
         if (snapshot is null && !quit) return;
 
@@ -138,7 +141,6 @@ public sealed partial class MainWindow
             ["status"] = _core.Call(new { cmd = "status" }),
             ["ocio"] = J.Str(_ocio, "source"),
             ["layers"] = new JsonArray(_core.Call(new { cmd = "layer", slot = 0 }), _core.Call(new { cmd = "layer", slot = 1 })),
-            ["notes"] = JsonSerializer.SerializeToNode(_notes.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value)),
         };
         await File.WriteAllTextAsync(file.Path, session.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
@@ -176,7 +178,7 @@ public sealed partial class MainWindow
                        diffGain = J.Num(color, "diffGain", 1) });
             var wipe = st?["wipe"];
             Send(new { cmd = "wipe", x = J.Num(wipe, "x", 0.5), y = J.Num(wipe, "y", 0.5), angle = J.Num(wipe, "angle"),
-                       mix = J.Num(wipe, "mix"), softness = J.Num(wipe, "softness") });
+                       mix = J.Num(wipe, "mix"), softness = 0.0 });
             Send(new { cmd = "compare", mode = J.Str(st, "compare", "a"), align = J.Str(st, "align", "fit") });
             Send(new { cmd = "lock_aov", on = J.Bool(st, "lockAov", true) });
             Send(new { cmd = "loop", on = J.Bool(st, "loop", true) });
@@ -188,10 +190,6 @@ public sealed partial class MainWindow
             Send(new { cmd = "inout", @in = J.Int(st, "in"), @out = J.Int(st, "out") });
             Send(new { cmd = "seek", frame = J.Int(st, "frame") });
 
-            _notes.Clear();
-            if (s["notes"] is JsonObject notes)
-                foreach (var kv in notes)
-                    _notes[int.Parse(kv.Key)] = kv.Value?.GetValue<string>() ?? "";
 
             // Bring the toolbar in line with the restored state.
             _updating = true;
@@ -206,7 +204,6 @@ public sealed partial class MainWindow
             RefreshLayerPanels();
             AfterChange();
             UpdateTitle();
-            LoadNote();
         }
         catch (Exception ex)
         {
@@ -235,7 +232,6 @@ public sealed partial class MainWindow
                 burnIn.Add($"{(s == 0 ? "A" : "B")}: {J.Str(layers[s], "pattern")}  [{J.Str(layers[s], "aovName")}]  frame {J.Int(layers[s], "frame")}");
         var color = _status["color"];
         burnIn.Add($"{J.Str(_status, "compare")}   {J.Str(color, "display")} / {J.Str(color, "view")}   exposure {J.Num(color, "exposure"):+0.0;-0.0}");
-        if (_notes.TryGetValue(frame, out var note)) burnIn.Add("Note: " + note.Replace('\n', ' '));
 
         var r = Send(new { cmd = "snapshot", path = file.Path, burnin = burnIn });
         if (ExrCore.Ok(r))
@@ -249,25 +245,6 @@ public sealed partial class MainWindow
                 ErrorBar.Severity = InfoBarSeverity.Error;
             });
         }
-    }
-
-    // ------------------------------------------------------------------ notes --
-    private async void OnExportNotes(object sender, RoutedEventArgs e)
-    {
-        var picker = new FileSavePicker { SuggestedFileName = "review_notes" };
-        InitPicker(picker);
-        picker.FileTypeChoices.Add("CSV", new List<string> { ".csv" });
-        var file = await picker.PickSaveFileAsync();
-        if (file is null) return;
-        var layers = _status["layers"] as JsonArray;
-        string a = J.Str(layers?[0], "pattern"), b = J.Str(layers?[1], "pattern");
-        var sb = new StringBuilder("frame,layer_a,layer_b,note\n");
-        foreach (int f in _notes.Keys.OrderBy(f => f))
-        {
-            string note = _notes[f];
-            sb.Append($"{f},\"{a}\",\"{b}\",\"{note.Replace("\"", "\"\"")}\"\n");
-        }
-        await File.WriteAllTextAsync(file.Path, sb.ToString(), Encoding.UTF8);
     }
 
     // ------------------------------------------------------------------- OCIO --

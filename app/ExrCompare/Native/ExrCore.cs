@@ -46,8 +46,6 @@ public sealed class ExrCore : IDisposable
     public void Resize(int width, int height, float scaleX, float scaleY) =>
         exrc_resize(_handle, width, height, scaleX, scaleY);
 
-    public bool Waveform(int slot, int width, int height, byte[] rgba) =>
-        exrc_waveform(_handle, slot, width, height, rgba) == 0;
 
     public void Dispose()
     {
@@ -86,8 +84,6 @@ public sealed class ExrCore : IDisposable
     [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
     private static extern void exrc_detach(IntPtr handle);
 
-    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl)]
-    private static extern int exrc_waveform(IntPtr handle, int slot, int width, int height, [Out] byte[] rgba);
 }
 
 /// <summary>Small helpers for reading engine JSON replies.</summary>

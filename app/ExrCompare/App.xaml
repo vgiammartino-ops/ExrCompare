@@ -18,6 +18,11 @@
             <x:String x:Key="ControlFastAnimationAfterDuration">00:00:00</x:String>
             <x:String x:Key="ComboBoxItemScaleAnimationDuration">00:00:00</x:String>
 
+            <!-- Compact top menu bar. -->
+            <Style TargetType="MenuBarItem">
+                <Setter Property="Padding" Value="7,0" />
+            </Style>
+
             <!-- Every icon button is the same fixed size, checked or not. -->
             <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="Width" Value="36" />

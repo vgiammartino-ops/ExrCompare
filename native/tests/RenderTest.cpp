@@ -105,8 +105,6 @@ int main(int argc, char** argv) {
     }
     std::cout << views << " display/view combinations compiled and rendered\n";
 
-    std::vector<unsigned char> wf(128 * 64 * 4);
-    EXPECT(exrc_waveform(h, 0, 128, 64, wf.data()) == 0);
     exrc_destroy(h);
     std::cout << (failures ? "FAILED" : "OK") << " (" << failures << " failures)\n";
     return failures ? 1 : 0;

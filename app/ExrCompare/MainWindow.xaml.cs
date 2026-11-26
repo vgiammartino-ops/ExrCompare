@@ -95,7 +95,6 @@ public sealed partial class MainWindow : Window
         _status = _core.Call(new { cmd = "status" });
         RefreshGeometry();
         ApplyStatus();
-        RefreshSidePanels(force: true);
         RefreshAnalyzer();
     }
 
@@ -187,8 +186,7 @@ public sealed partial class MainWindow : Window
         LoopMenuItem.IsChecked = LoopToggle.IsChecked == true;
         string compare = J.Str(_status, "compare", "a");
         SyncCompareBar(compare);
-        DiffGainBox.Visibility = compare == "difference" ? Visibility.Visible : Visibility.Collapsed;
-        WipeSoftBox.Visibility = compare == "wipe" ? Visibility.Visible : Visibility.Collapsed;
+        DiffGainPanel.Visibility = compare == "difference" ? Visibility.Visible : Visibility.Collapsed;
         _updating = false;
         SyncWipeFromStatus();
 
@@ -250,8 +248,6 @@ public sealed partial class MainWindow : Window
     private void OnFrameChanged(bool playing)
     {
         DrawOverlay();
-        LoadNote();
-        if (!playing || _tick % 8 == 0) RefreshSidePanels(force: false);
         if (!playing || _tick % 8 == 0) RefreshAnalyzer();
     }
 
@@ -476,12 +472,6 @@ public sealed partial class MainWindow : Window
         if (!_updating && !double.IsNaN(args.NewValue)) Send(new { cmd = "compare", diffGain = args.NewValue });
     }
 
-    private void OnWipeSoftChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
-    {
-        if (!_ready) return;
-        if (!_updating && !double.IsNaN(args.NewValue)) Send(new { cmd = "wipe", softness = args.NewValue * Scale });
-    }
-
     private void SetLockAov(bool on)
     {
         LockAovSwitch.IsChecked = on;
@@ -570,6 +560,13 @@ public sealed partial class MainWindow : Window
         Fill(ViewCombo, _ocio["views"], J.Str(_ocio, "view"));
         var looks = (_ocio["looks"] as JsonArray) ?? new JsonArray();
         LookCombo.Visibility = looks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // The look menu only takes toolbar width when the config has looks.
+        LookColumn.Width = looks.Count > 0 ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
+        LookColumn.MinWidth = looks.Count > 0 ? 90 : 0;
+        LookColumn.MaxWidth = looks.Count > 0 ? 150 : double.PositiveInfinity;
+        bool legacy = J.Str(_ocio, "source") == LegacyConfigUri;
+        WorkflowLegacyItem.IsChecked = legacy;
+        WorkflowAcesItem.IsChecked = !legacy;
         LookCombo.Items.Clear();
         LookCombo.Items.Add("(no look)");
         foreach (var l in looks) LookCombo.Items.Add(l!.GetValue<string>());
@@ -606,6 +603,16 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnDefaultOcio(object sender, RoutedEventArgs e) => LoadOcio("");
+
+    // Colour workflows. The app always starts in ACES 2.0; legacy is the plain linear sRGB /
+    // Rec.709 config built into the engine (sRGB, Rec.709, BT.1886 and gamma views, no tone mapping).
+    private const string AcesConfigUri = "ocio://cg-config-latest";
+    private const string LegacyConfigUri = "ocio://exrcompare-legacy-srgb";
+
+    private void OnWorkflowAces(object sender, RoutedEventArgs e) => SetWorkflow("aces");
+    private void OnWorkflowLegacy(object sender, RoutedEventArgs e) => SetWorkflow("legacy");
+
+    private void SetWorkflow(string workflow) => LoadOcio(workflow == "legacy" ? LegacyConfigUri : AcesConfigUri);
 
     private void OnDisplayChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -719,22 +726,6 @@ public sealed partial class MainWindow : Window
         SidePaneToggle.IsChecked = open;
         SidePaneIcon.Glyph = open ? "\uEA5C" : "\uEA5B";  // arrow shows what a click will do
         ToolTipService.SetToolTip(SidePaneToggle, open ? "Hide side pane (Ctrl+I)" : "Show side pane (Ctrl+I)");
-        if (open) RefreshSidePanels(force: true);
-    }
-
-    private void OnPaneTab(object sender, RoutedEventArgs e) => ShowPane((string)((FrameworkElement)sender).Tag);
-    private void OnShowPixelPane(object sender, RoutedEventArgs e) => ShowPane("pixel");
-
-    /// <summary>Side pane tabs are plain toggle buttons: instant, fixed size, no sliding indicator.</summary>
-    private void ShowPane(string tag)
-    {
-        foreach (var t in PaneTabs.Children.OfType<ToggleButton>()) t.IsChecked = (string)t.Tag == tag;
-        LayersPage.Visibility = tag == "layers" ? Visibility.Visible : Visibility.Collapsed;
-        PixelPage.Visibility = tag == "pixel" ? Visibility.Visible : Visibility.Collapsed;
-        InfoPage.Visibility = tag == "info" ? Visibility.Visible : Visibility.Collapsed;
-        ScopesPage.Visibility = tag == "scopes" ? Visibility.Visible : Visibility.Collapsed;
-        if (tag == "pixel") RefreshAnalyzer();
-        RefreshSidePanels(force: true);
     }
 
     private void OnExit(object sender, RoutedEventArgs e) => Close();

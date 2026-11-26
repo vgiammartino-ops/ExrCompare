@@ -2,7 +2,7 @@
  * exrcore.dll - C interface used by the C# WinUI app (P/Invoke).
  *
  * Almost everything goes through exrc_call() as JSON: {"cmd": "...", ...} in, a JSON object out.
- * Only the hot or binary paths have their own functions (panel attach/resize, waveform pixels).
+ * Only the hot or binary paths have their own functions (panel attach/resize).
  * Strings are UTF-8. All functions are safe to call from the UI thread; rendering happens on a
  * thread owned by the DLL.
  */
@@ -39,8 +39,6 @@ EXRC_API int exrc_attach_panel(ExrcHandle* h, void* panel, int pixelWidth, int p
 EXRC_API void exrc_resize(ExrcHandle* h, int pixelWidth, int pixelHeight, float scaleX, float scaleY);
 EXRC_API void exrc_detach(ExrcHandle* h);
 
-/* Waveform scope of a layer's current frame: writes width*height*4 RGBA bytes. 0 on success. */
-EXRC_API int exrc_waveform(ExrcHandle* h, int slot, int width, int height, unsigned char* rgba);
 
 #ifdef __cplusplus
 }

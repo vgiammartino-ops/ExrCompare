@@ -73,7 +73,7 @@ TEST_CASE("Session: open A and B, AOV lock, compare modes, render state") {
     CHECK(!call(s, {{"cmd", "compare"}, {"mode", "nope"}})["ok"].get<bool>());
 }
 
-TEST_CASE("Session: transport, offsets, probe, stats, histogram, waveform, metadata") {
+TEST_CASE("Session: transport, offsets, probe, stats, metadata") {
     TempDir d;
     makeShot(d.path, "beauty.", 1, 20);
     Session s(testConfig());
@@ -101,10 +101,6 @@ TEST_CASE("Session: transport, offsets, probe, stats, histogram, waveform, metad
     CHECK(reg.contains("a") && reg["a"]["count"].get<int>() == 16 * 8);
     json stats = call(s, {{"cmd", "stats"}});
     CHECK(stats.contains("a"));
-    json hg = call(s, {{"cmd", "histogram"}, {"slot", 0}, {"bins", 64}});
-    CHECK(hg["histogram"].is_object() && hg["histogram"]["bins"].get<int>() == 64);
-    std::vector<uint8_t> wf;
-    CHECK(s.waveform(0, 64, 32, wf) && wf.size() == size_t(64 * 32 * 4));
     json md = call(s, {{"cmd", "metadata"}, {"slot", 0}});
     CHECK(md["metadata"].size() > 3);
     json geo = call(s, {{"cmd", "geometry"}});

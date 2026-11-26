@@ -107,7 +107,9 @@ jobs:
             if (-not (Test-Path $exe)) { "$exe not built" | Tee-Object $log -Append; continue }
             $name = if ($exe -match 'single') { 'single' } else { 'folder' }
             $png = "$env:RUNNER_TEMP\smoke-$name.png"
-            $argList = "`"$samples\a\a.0001.exr`" `"$samples\b\b.0001.exr`" --compare wipe --snapshot `"$png`" --quit"
+            # The folder build checks the legacy linear sRGB workflow; the single exe the default ACES 2.0.
+            $wf = if ($name -eq 'folder') { '--workflow legacy ' } else { '' }
+            $argList = "`"$samples\a\a.0001.exr`" `"$samples\b\b.0001.exr`" $wf--compare wipe --snapshot `"$png`" --quit"
             $p = Start-Process -FilePath $exe -ArgumentList $argList -PassThru
             if (-not $p.WaitForExit(90000)) { "$exe still running after 90 s" | Tee-Object $log -Append; Stop-Process -Id $p.Id -Force }
             "$exe exit code $($p.ExitCode)" | Tee-Object $log -Append
@@ -125,7 +127,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path build/publish/ExrCompare -DestinationPath dist/ExrCompare-portable-x64.zip -CompressionLevel Optimal
+          # Only the portable single exe is released; the folder build is just a CI test.
           if (Test-Path build/publish/single/ExrCompare.exe) { Copy-Item build/publish/single/ExrCompare.exe dist/ExrCompare-x64.exe }
           Get-ChildItem dist | Format-Table Name, Length | Out-String | Tee-Object -FilePath logs/7-package.log
 
@@ -140,7 +142,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           gh release delete latest --yes --cleanup-tag 2>$null
-          $notes = "Automatic build of ${{ github.sha }}.`n`n- ExrCompare-portable-x64.zip: unzip anywhere and run ExrCompare.exe`n- ExrCompare-x64.exe: single file (unpacks to a temp folder on first run)"
+          $notes = "Automatic build of ${{ github.sha }}.`n`n- ExrCompare-x64.exe: portable single file, nothing to install (unpacks to a temp folder on first run)"
           gh release create latest (Get-ChildItem dist/*).FullName --prerelease --title "Latest build" --notes $notes --target ${{ github.sha }}
 
       - name: Publish logs to the ci-logs branch

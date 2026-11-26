@@ -4,8 +4,7 @@ A Windows 11 viewer for OpenEXR image sequences, built for reviewing renders and
 comparing two sequences side by side, Nuke-viewer style.
 
 **Download:** the latest build is on the [Releases page](../../releases/tag/latest):
-- `ExrCompare-portable-x64.zip`: unzip anywhere and run `ExrCompare.exe`.
-- `ExrCompare-x64.exe`: a single file; it unpacks to a temp folder on first run.
+- `ExrCompare-x64.exe`: a portable single file. Run it from anywhere; it unpacks to a temp folder on first run.
 
 Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a Direct3D 11 GPU.
 
@@ -20,15 +19,20 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
 - **Lock AOV:** A and B switch AOV together.
 - **Versions:** step a layer up or down through `v###` versions on disk (Alt+Up / Alt+Down).
 
-**Compare modes** (toolbar dropdown, next to the AOV dropdown; the mouse wheel steps one entry per notch)
-- A only, B only
-- **Wipe:** a Nuke-style widget. Drag the centre to move it, the long handle to rotate, and the arc handle to dissolve B into A. Edge softness is adjustable.
+**Compare modes** (Nuke-style top bar: `A [AOV]  [on/off] [mode]  B [AOV]`; the mouse wheel steps one entry per notch)
+- A only, B only (click the orange A or B)
+- **Wipe:** a Nuke-style widget. Drag the centre to move it, the long handle to rotate, and the arc handle to dissolve B into A.
 - **Stack:** B over A using the layer opacities.
 - **Difference:** |A-B| in scene linear, with gain.
 - **Side by side** and **over/under.**
 - **Different resolutions:** B is fitted to A, or shown at the same pixel scale.
 
 **Colour (OpenColorIO)**
+- **Workflows** (Colour menu). The app always starts in **ACES 2.0** (OCIO's CG config, view "ACES 2.0 - SDR 100 nits").
+- **Linear sRGB / Rec.709 (legacy)**, built in: linear Rec.709 primaries shown through plain curves with no tone mapping or gamut mapping. 1.0 shows as white and values above 1.0 clip, like Nuke's default viewer.
+  - `sRGB Display`: views `sRGB` (0.18 shows as 0.461), `Gamma 2.2` and `Raw`.
+  - `Rec.709 Display`: views `Rec.709` (camera curve, as Nuke's `rec709`; 0.18 shows as 0.409), `BT.1886 (gamma 2.4)` (0.18 shows as 0.489) and `Raw`.
+  - Command line: `--workflow legacy` or `--workflow aces`.
 - Load any `config.ocio` / `.ocioz`, use `$OCIO`, or pick a built-in ACES config, including the ACES 2.0 CG and Studio configs.
 - Display / view / look selection, per-layer input colour space, exposure and gamma.
 - Layers are compared in scene linear; the view is applied last.
@@ -44,21 +48,18 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
 - **AOV contact sheet:** every AOV of the frame in a grid; click a tile to view it.
 - **Beauty rebuild check:** sum chosen AOVs and show |beauty - sum|.
 - **Highlights:** NaN/Inf (magenta) and negative values (cyan), false-colour exposure map, alpha matte overlay, R/G/B/A/luminance channels.
-- **Pixel Analyzer** (Nuke's pixel sampler), for A and B at once:
-  - Hover reads the pixel's R, G, B and A in scene linear, unclamped (values above 1.0 show as is), plus a swatch of the displayed colour.
-  - Ctrl+drag draws a red box that stays sampled after you let go; Ctrl+click pins one pixel. The box follows pan and zoom and is re-read on every frame and AOV.
-  - The Pixel tab shows current, min, max, average and median per channel, with NaN/Inf counts. Esc or Clear sample removes the box.
-  - A fixed two-row readout bar under the viewer (one row per input, like Nuke): resolution, bbox, channels, `x= y= WxH`, R G B A, swatch, H S V and L.
-- Per-channel frame statistics.
-- **Histogram and waveform** scopes.
-- **Side pane** (layers, Pixel Analyzer, info, scopes) starts closed. Open or hide it with the pane button at the right end of the transport bar, View → Side pane, or Ctrl+I.
-- **Metadata panel:** every EXR header attribute. A data-window outline is drawn on the image.
+- **Pixel readout** (Nuke's pixel sampler), for A and B at once, in a fixed two-row bar under the viewer:
+  - Each row: resolution, bbox, channels, `x= y= WxH`, R G B A in scene linear (unclamped; above 1.0 shows as is), a swatch of the displayed colour, H S V and L.
+  - Ctrl+drag draws a red box that stays sampled (its average is shown) after you let go; Ctrl+click pins one pixel. The box follows pan and zoom and is re-read on every frame and AOV. Esc or the clear button removes it.
+- **View toggles** (bottom left, after Full screen): false colour, NaN/Inf highlight, alpha matte, half-resolution proxy.
+- **Exposure and gamma** on their own line under the top bar.
+- **Side pane** (layer cards) starts closed. Open or hide it with the pane button at the right end of the transport bar, View → Side pane, or Ctrl+I.
+- A data-window outline is drawn on the image.
 - **Stereo:** multi-view EXR view selector.
 
 **Review workflow**
-- Per-frame notes, exported as CSV.
 - Snapshots (PNG/JPEG) with burn-in text.
-- Sessions (`.exrcs`) save layers, AOVs, colour settings, wipe, in/out and notes.
+- Sessions (`.exrcs`) save layers, AOVs, colour settings, wipe and in/out.
 
 **Playback**
 - Exact 23.976 / 29.97 timing, loop on/off, in/out points, play backward, frame stepping.

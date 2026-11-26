@@ -59,68 +59,6 @@ RegionStats regionStats(const Frame& f, int x0, int y0, int x1, int y1) {
     return s;
 }
 
-std::vector<float> downsampleRgba(const Frame& f, int maxWidth, int& outW, int& outH) {
-    outW = outH = 0;
-    if (f.missing || f.data.empty() || f.width <= 0) return {};
-    const int step = std::max(1, (f.width + maxWidth - 1) / std::max(1, maxWidth));
-    outW = (f.width + step - 1) / step;
-    outH = (f.height + step - 1) / step;
-    std::vector<float> out(size_t(outW) * outH * 4);
-    for (int y = 0; y < outH; ++y)
-        for (int x = 0; x < outW; ++x)
-            for (int c = 0; c < 4; ++c) out[(size_t(y) * outW + x) * 4 + c] = f.sample(x * step, y * step, c);
-    return out;
-}
-
-Histogram histogram(const float* rgba, int w, int h, int bins) {
-    Histogram hg;
-    hg.bins = std::max(2, bins);
-    hg.r.assign(hg.bins, 0);
-    hg.g.assign(hg.bins, 0);
-    hg.b.assign(hg.bins, 0);
-    hg.luma.assign(hg.bins, 0);
-    auto bin = [&](float v) {
-        if (!std::isfinite(v)) return -1;
-        return std::clamp(int(v * (hg.bins - 1) + 0.5f), 0, hg.bins - 1);
-    };
-    for (size_t i = 0; i < size_t(w) * h; ++i) {
-        const float* p = rgba + i * 4;
-        int k;
-        if ((k = bin(p[0])) >= 0) ++hg.r[k];
-        if ((k = bin(p[1])) >= 0) ++hg.g[k];
-        if ((k = bin(p[2])) >= 0) ++hg.b[k];
-        if ((k = bin(0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2])) >= 0) ++hg.luma[k];
-    }
-    return hg;
-}
-
-std::vector<uint8_t> waveform(const float* rgba, int w, int h, int outW, int outH) {
-    std::vector<uint8_t> img(size_t(outW) * outH * 4, 0);
-    if (!rgba || w <= 0 || h <= 0 || outW <= 0 || outH <= 0) return img;
-    std::vector<uint32_t> acc(size_t(outW) * outH * 3, 0);
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x) {
-            const int ox = std::min(outW - 1, x * outW / w);
-            const float* p = rgba + (size_t(y) * w + x) * 4;
-            for (int c = 0; c < 3; ++c) {
-                if (!std::isfinite(p[c])) continue;
-                const int oy = outH - 1 - std::clamp(int(p[c] * (outH - 1) + 0.5f), 0, outH - 1);
-                ++acc[(size_t(oy) * outW + ox) * 3 + c];
-            }
-        }
-    }
-    // Log-ish intensity so sparse traces stay visible.
-    const double norm = std::log1p(double(h) / 4.0);
-    for (size_t i = 0; i < size_t(outW) * outH; ++i) {
-        for (int c = 0; c < 3; ++c) {
-            const double v = std::log1p(double(acc[i * 3 + c])) / norm;
-            img[i * 4 + c] = uint8_t(std::clamp(v * 255.0, 0.0, 255.0));
-        }
-        img[i * 4 + 3] = 255;
-    }
-    return img;
-}
-
 namespace {
 
 std::shared_ptr<Frame> newFloatFrame(int w, int h, int fullW, int fullH, int frameNumber, uint32_t key) {

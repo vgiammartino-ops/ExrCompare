@@ -357,7 +357,6 @@ public sealed partial class MainWindow
                 else _core.Call(new { cmd = "sample_region", x0, y0, x1, y1 });
                 RefreshGeometry();
                 RefreshAnalyzer();
-                ShowPane("pixel");
                 break;
             }
             case Drag.WipeCenter or Drag.WipeRotate or Drag.WipeMix:
@@ -450,8 +449,6 @@ public sealed partial class MainWindow
         var (x, y) = ToPx(p);
         var hover = _core.Call(new { cmd = "analyzer", x, y, region = false });
         ShowReadout(hover, hovering: true);
-        UpdateAnalyzerCurrent(hover);
-        if (PixelPage.Visibility == Visibility.Visible) UpdateCryptoDetail(x, y);
     }
 
     /// <summary>Re-reads the pinned sample (frame, AOV or layer changed) and refreshes the readouts.</summary>
@@ -473,7 +470,6 @@ public sealed partial class MainWindow
         else r = _core.Call(new { cmd = "analyzer" });
         _analyzer = r;
         ShowReadout(r, hovering: _lastPointer is not null);
-        UpdateAnalyzerTable(r);
     }
 
     private void OnClearSample(object sender, RoutedEventArgs e) => ClearSample();
@@ -638,118 +634,5 @@ public sealed partial class MainWindow
         if (display is null || display.Count < 3) return new SolidColorBrush(Colors.Transparent);
         byte B(int i) => (byte)Math.Round(Math.Clamp(display[i]!.GetValue<double>(), 0, 1) * 255);
         return new SolidColorBrush(Windows.UI.Color.FromArgb(255, B(0), B(1), B(2)));
-    }
-
-    // Side-pane table: Current / Min / Max / Average / Median x R G B A.
-    private static readonly string[] AnalyzerRows = { "Current", "Min", "Max", "Average", "Median" };
-    private static readonly string[] AnalyzerKeys = { "", "min", "max", "mean", "median" };
-    private readonly TextBlock[][,] _analyzerCells = new TextBlock[2][,];
-    private readonly TextBlock[] _analyzerTitles = new TextBlock[2];
-    private readonly Border[][] _analyzerSwatches = new Border[2][];
-    private readonly StackPanel[] _analyzerBlocks = new StackPanel[2];
-
-    private void BuildAnalyzerTable()
-    {
-        for (int s = 0; s < 2; s++)
-        {
-            var block = new StackPanel { Spacing = 6 };
-            _analyzerTitles[s] = new TextBlock { FontFamily = Mono, FontSize = 13, TextWrapping = TextWrapping.Wrap };
-            block.Children.Add(_analyzerTitles[s]);
-            var grid = new Grid { ColumnSpacing = 6, RowSpacing = 4 };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
-            for (int c = 0; c < 4; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
-            for (int r = 0; r <= AnalyzerRows.Length; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            string[] head = { "", "R", "G", "B", "A" };
-            for (int c = 1; c < 5; c++)
-            {
-                var h = new TextBlock { Text = head[c], FontFamily = Mono, FontSize = 13, TextAlignment = TextAlignment.Right, Foreground = new SolidColorBrush(ChannelColors[c - 1]) };
-                Grid.SetColumn(h, c);
-                grid.Children.Add(h);
-            }
-            var cells = new TextBlock[AnalyzerRows.Length, 4];
-            var swatches = new Border[AnalyzerRows.Length];
-            for (int r = 0; r < AnalyzerRows.Length; r++)
-            {
-                var label = new TextBlock { Text = AnalyzerRows[r], FontSize = 13, Opacity = 0.8 };
-                Grid.SetRow(label, r + 1);
-                grid.Children.Add(label);
-                for (int c = 0; c < 4; c++)
-                {
-                    var t = new TextBlock { Text = "-", FontFamily = Mono, FontSize = 13, TextAlignment = TextAlignment.Right, Foreground = new SolidColorBrush(ChannelColors[c]) };
-                    Grid.SetRow(t, r + 1);
-                    Grid.SetColumn(t, c + 1);
-                    grid.Children.Add(t);
-                    cells[r, c] = t;
-                }
-                var sw = new Border { Width = 22, Height = 14, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center,
-                                      BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 90, 90, 90)), Visibility = r is 0 or 3 ? Visibility.Visible : Visibility.Collapsed };
-                Grid.SetRow(sw, r + 1);
-                Grid.SetColumn(sw, 5);
-                grid.Children.Add(sw);
-                swatches[r] = sw;
-            }
-            block.Children.Add(grid);
-            _analyzerCells[s] = cells;
-            _analyzerSwatches[s] = swatches;
-            _analyzerBlocks[s] = block;
-            AnalyzerHost.Children.Add(block);
-        }
-    }
-
-    private void UpdateAnalyzerCurrent(JsonObject r)
-    {
-        if (_analyzerCells[0] is null) BuildAnalyzerTable();
-        for (int s = 0; s < 2; s++)
-        {
-            var px = r[s == 0 ? "a" : "b"]?["pixel"];
-            var rgba = px?["rgba"] as JsonArray;
-            for (int c = 0; c < 4; c++) _analyzerCells[s][0, c].Text = Fmt(rgba?[c]);
-            _analyzerSwatches[s][0].Background = SwatchBrush(px?["display"] as JsonArray);
-        }
-    }
-
-    private void UpdateAnalyzerTable(JsonObject r)
-    {
-        if (_analyzerCells[0] is null) BuildAnalyzerTable();
-        UpdateAnalyzerCurrent(r);
-        bool any = false;
-        for (int s = 0; s < 2; s++)
-        {
-            var l = r[s == 0 ? "a" : "b"];
-            _analyzerBlocks[s].Visibility = l is null ? Visibility.Collapsed : Visibility.Visible;
-            any |= l is not null;
-            var reg = l?["region"];
-            string name = s == 0 ? "A" : "B";
-            _analyzerTitles[s].Text = reg is null
-                ? $"{name}   no sample (Ctrl+drag a box)"
-                : $"{name}   x={J.Int(reg, "x")} y={J.Int(reg, "y")} {J.Int(reg, "w")}x{J.Int(reg, "h")}   {J.Int(reg, "count")} px" +
-                  (J.Int(reg, "nan") + J.Int(reg, "inf") > 0 ? $"   {J.Int(reg, "nan")} NaN  {J.Int(reg, "inf")} Inf" : "");
-            for (int row = 1; row < AnalyzerRows.Length; row++)
-            {
-                var v = reg?[AnalyzerKeys[row]] as JsonArray;
-                for (int c = 0; c < 4; c++) _analyzerCells[s][row, c].Text = Fmt(v?[c]);
-            }
-            _analyzerSwatches[s][3].Background = SwatchBrush(reg?["display"] as JsonArray);
-        }
-        AnalyzerEmpty.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    /// <summary>Cryptomatte / ID names under the pointer, shown below the analyzer table.</summary>
-    private void UpdateCryptoDetail(double x, double y)
-    {
-        var probe = _core.Call(new { cmd = "probe", x, y });
-        var detail = new List<string>();
-        foreach (var (key, name) in new[] { ("a", "A"), ("b", "B") })
-        {
-            if (probe[key]?["crypto"] is not JsonArray ranks) continue;
-            foreach (var r in ranks.Where(r => J.Num(r, "coverage") > 0))
-            {
-                string n = J.Str(r, "name");
-                detail.Add($"{name}  {(n.Length > 0 ? n : "id " + J.Str(r, "id"))}  coverage {J.Num(r, "coverage"):0.000}");
-            }
-        }
-        ProbeDetail.Text = string.Join("\n", detail);
-        ProbeDetail.Visibility = detail.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 }

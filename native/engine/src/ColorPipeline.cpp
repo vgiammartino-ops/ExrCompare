@@ -24,8 +24,64 @@ ColorPipeline::~ColorPipeline() = default;
 
 std::string ColorPipeline::ocioVersion() const { return OCIO::GetVersion(); }
 
+namespace {
+
+// Legacy linear workflow: reference = linear Rec.709 / sRGB primaries. Each encoded space decodes
+// to linear with an exact curve (no LUTs), so views are 1.0 -> white, above 1.0 clips, primaries pure.
+OCIO::ConstConfigRcPtr makeLegacyConfig() {
+    auto cfg = OCIO::Config::Create();
+    cfg->setName("exrcompare-legacy-srgb");
+    cfg->setDescription("Linear sRGB / Rec.709 (legacy): no tone mapping, no gamut mapping.");
+    auto add = [&](const char* name, const char* family, const char* encoding, OCIO::ConstTransformRcPtr toRef, bool data) {
+        auto cs = OCIO::ColorSpace::Create(OCIO::REFERENCE_SPACE_SCENE);
+        cs->setName(name);
+        cs->setFamily(family);
+        cs->setEncoding(encoding);
+        cs->setIsData(data);
+        if (toRef) cs->setTransform(toRef, OCIO::COLORSPACE_DIR_TO_REFERENCE);
+        cfg->addColorSpace(cs);
+    };
+    // Forward ExponentWithLinear / Exponent = decode (encoded -> linear).
+    auto curve = [](double gamma, double offset) {
+        auto t = OCIO::ExponentWithLinearTransform::Create();
+        const double g[4] = {gamma, gamma, gamma, 1.0}, o[4] = {offset, offset, offset, 0.0};
+        t->setGamma(g);
+        t->setOffset(o);
+        return OCIO::ConstTransformRcPtr(t);
+    };
+    auto power = [](double gamma) {
+        auto t = OCIO::ExponentTransform::Create();
+        const double g[4] = {gamma, gamma, gamma, 1.0};
+        t->setValue(g);
+        return OCIO::ConstTransformRcPtr(t);
+    };
+    add("Linear Rec.709 (sRGB)", "Scene-linear", "scene-linear", nullptr, false);
+    add("sRGB", "Display", "sdr-video", curve(2.4, 0.055), false);
+    add("Rec.709", "Display", "sdr-video", curve(1.0 / 0.45, 0.099), false);  // camera OETF (Nuke "rec709")
+    add("Gamma 2.4 (BT.1886)", "Display", "sdr-video", power(2.4), false);
+    add("Gamma 2.2", "Display", "sdr-video", power(2.2), false);
+    add("Raw", "Utility", "", nullptr, true);
+    cfg->setRole(OCIO::ROLE_REFERENCE, "Linear Rec.709 (sRGB)");
+    cfg->setRole(OCIO::ROLE_SCENE_LINEAR, "Linear Rec.709 (sRGB)");
+    cfg->setRole(OCIO::ROLE_DEFAULT, "Linear Rec.709 (sRGB)");
+    cfg->setRole(OCIO::ROLE_DATA, "Raw");
+    cfg->setRole(OCIO::ROLE_COLOR_PICKING, "sRGB");
+    cfg->addDisplayView("sRGB Display", "sRGB", "sRGB", "");
+    cfg->addDisplayView("sRGB Display", "Gamma 2.2", "Gamma 2.2", "");
+    cfg->addDisplayView("sRGB Display", "Raw", "Raw", "");
+    cfg->addDisplayView("Rec.709 Display", "Rec.709", "Rec.709", "");
+    cfg->addDisplayView("Rec.709 Display", "BT.1886 (gamma 2.4)", "Gamma 2.4 (BT.1886)", "");
+    cfg->addDisplayView("Rec.709 Display", "Raw", "Raw", "");
+    cfg->setActiveDisplays("sRGB Display, Rec.709 Display");
+    cfg->validate();
+    return cfg;
+}
+
+}  // namespace
+
 std::vector<BuiltinConfig> ColorPipeline::builtinConfigs() {
     std::vector<BuiltinConfig> out;
+    out.push_back({kLegacyConfigUri, "Linear sRGB / Rec.709 (legacy, no tone mapping)", false});
 #if OCIO_VERSION_HEX >= 0x02020000
     const auto& reg = OCIO::BuiltinConfigRegistry::Get();
     for (size_t i = 0; i < reg.getNumBuiltinConfigs(); ++i) {
@@ -55,7 +111,7 @@ bool ColorPipeline::load(const std::string& pathOrUri, std::string* error) {
     std::string lastError;
     for (const auto& c : candidates) {
         try {
-            auto cfg = OCIO::Config::CreateFromFile(c.c_str());
+            auto cfg = c == kLegacyConfigUri ? makeLegacyConfig() : OCIO::Config::CreateFromFile(c.c_str());
             cfg->validate();
             impl_->config = cfg;
             source_ = c;

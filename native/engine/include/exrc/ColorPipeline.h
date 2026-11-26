@@ -28,6 +28,10 @@ struct ShaderFunction {
     int uniformCount = 0;            // dynamic properties (unsupported: reported, not set)
 };
 
+// Built into this app (not OCIO's registry): plain linear sRGB / Rec.709 primaries with sRGB,
+// Rec.709 (camera curve), BT.1886 and gamma views and no tone mapping, like Nuke's default viewer.
+inline constexpr const char* kLegacyConfigUri = "ocio://exrcompare-legacy-srgb";
+
 struct BuiltinConfig {
     std::string name;    // "ocio://..." URI
     std::string uiName;

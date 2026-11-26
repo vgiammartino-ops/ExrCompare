@@ -87,9 +87,6 @@ public:
     // Full-resolution size of what is on screen (both layers for side-by-side), for snapshots.
     bool canvasSize(int& width, int& height);
 
-    // Scopes: waveform of the given slot's current frame as RGBA8 (outW*outH*4 bytes).
-    bool waveform(int slot, int outW, int outH, std::vector<uint8_t>& rgba);
-
     void waitForDecodes();  // tests
 
 private:

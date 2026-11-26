@@ -84,7 +84,7 @@ TEST_CASE("OCIO: HLSL generated for input and display; CPU path matches the sRGB
 
 TEST_CASE("OCIO: built-in ACES config loads when this OCIO has it") {
     const auto builtins = ColorPipeline::builtinConfigs();
-    if (builtins.empty()) {
+    if (builtins.size() <= 1) {  // only this app's legacy config: OCIO's registry is absent
         std::cout << "  (OCIO " << ColorPipeline().ocioVersion() << " has no built-in configs; skipped)\n";
         return;
     }
@@ -96,4 +96,30 @@ TEST_CASE("OCIO: built-in ACES config loads when this OCIO has it") {
     CHECK(!d.code.empty());
     std::cout << "  default config: " << p.configName() << ", display " << p.display() << " / " << p.view() << ", "
               << d.luts.size() << " LUT textures\n";
+}
+
+TEST_CASE("OCIO: legacy linear sRGB / Rec.709 workflow (no tone mapping)") {
+    ColorPipeline ocio;
+    std::string err;
+    CHECK(ocio.load(kLegacyConfigUri, &err));
+    CHECK_EQ(ocio.sceneLinear(), std::string("Linear Rec.709 (sRGB)"));
+    CHECK_EQ(ocio.display(), std::string("sRGB Display"));
+    CHECK_EQ(ocio.view(), std::string("sRGB"));
+    bool listed = false;
+    for (const auto& b : ColorPipeline::builtinConfigs()) listed |= b.name == kLegacyConfigUri;
+    CHECK(listed);
+    auto run = [&](const char* display, const char* view, float v) {
+        CHECK(ocio.setDisplayView(display, view, "", &err));
+        float px[4] = {v, v, v, 1.0f};
+        ocio.linearToDisplayCpu(px, 1, 1);
+        return px[0];
+    };
+    CHECK_NEAR(run("sRGB Display", "sRGB", 0.18f), 0.4613, 1e-3);
+    CHECK_NEAR(run("sRGB Display", "sRGB", 1.0f), 1.0, 1e-4);
+    CHECK_NEAR(run("sRGB Display", "sRGB", 0.0f), 0.0, 1e-6);
+    CHECK_NEAR(run("sRGB Display", "Gamma 2.2", 0.18f), 0.4587, 1e-3);
+    CHECK_NEAR(run("Rec.709 Display", "Rec.709", 0.18f), 0.4090, 1e-3);
+    CHECK_NEAR(run("Rec.709 Display", "BT.1886 (gamma 2.4)", 0.18f), 0.4894, 1e-3);
+    CHECK(run("sRGB Display", "sRGB", 4.0f) >= 1.0f);  // no tone curve: clips on screen
+    CHECK(!ocio.displayShader("OCIO_Display", "ociod_").code.empty());
 }

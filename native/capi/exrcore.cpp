@@ -252,12 +252,4 @@ EXRC_API void exrc_detach(ExrcHandle* h) {
     if (h) h->stopRendering();
 }
 
-EXRC_API int exrc_waveform(ExrcHandle* h, int slot, int w, int ht, unsigned char* rgba) {
-    if (!h || !rgba || w <= 0 || ht <= 0) return -1;
-    std::vector<uint8_t> img;
-    if (!h->session->waveform(slot, w, ht, img)) return -2;
-    std::memcpy(rgba, img.data(), img.size());
-    return 0;
-}
-
 }  // extern "C"
