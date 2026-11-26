@@ -4,7 +4,7 @@ A Windows 11 viewer for OpenEXR image sequences, built for reviewing renders and
 comparing two sequences side by side, Nuke-viewer style.
 
 **Download:** the latest build is on the [Releases page](../../releases/tag/latest):
-- `ExrCompare-x64.exe`: a portable single file. Run it from anywhere; it unpacks to a temp folder on first run.
+- `ExrCompare-portable-x64.zip`: unzip anywhere (keep the folder together) and run `ExrCompare.exe`.
 
 Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a Direct3D 11 GPU.
 

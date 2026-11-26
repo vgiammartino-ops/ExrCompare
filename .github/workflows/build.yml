@@ -127,8 +127,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           New-Item -ItemType Directory -Force dist | Out-Null
-          # Only the portable single exe is released; the folder build is just a CI test.
-          if (Test-Path build/publish/single/ExrCompare.exe) { Copy-Item build/publish/single/ExrCompare.exe dist/ExrCompare-x64.exe }
+          # Only the portable folder (zipped) is released. The single-file exe is still built and
+          # smoke-tested in CI but not published: it unpacks ~240 MB to %TEMP% before showing a window.
+          Compress-Archive -Path build/publish/ExrCompare -DestinationPath dist/ExrCompare-portable-x64.zip -CompressionLevel Optimal
           Get-ChildItem dist | Format-Table Name, Length | Out-String | Tee-Object -FilePath logs/7-package.log
 
       - uses: actions/upload-artifact@v4
@@ -142,7 +143,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           gh release delete latest --yes --cleanup-tag 2>$null
-          $notes = "Automatic build of ${{ github.sha }}.`n`n- ExrCompare-x64.exe: portable single file, nothing to install (unpacks to a temp folder on first run)"
+          $notes = "Automatic build of ${{ github.sha }}.`n`n- ExrCompare-portable-x64.zip: unzip anywhere and run ExrCompare.exe (nothing to install)"
           gh release create latest (Get-ChildItem dist/*).FullName --prerelease --title "Latest build" --notes $notes --target ${{ github.sha }}
 
       - name: Publish logs to the ci-logs branch
