@@ -52,7 +52,7 @@ jobs:
           $ErrorActionPreference = 'Continue'
           cmake -S native -B build/native-build -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=$env:TRIPLET 2>&1 | Tee-Object -FilePath logs/1-native-configure.log
+            "-DVCPKG_TARGET_TRIPLET=$env:TRIPLET" 2>&1 | Tee-Object -FilePath logs/1-native-configure.log
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Build native
