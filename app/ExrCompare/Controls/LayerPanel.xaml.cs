@@ -31,7 +31,9 @@ public sealed partial class LayerPanel : UserControl
 
     public LayerPanel()
     {
+        _updating = true;  // XAML fires change handlers while it loads; ignore them
         InitializeComponent();
+        _updating = false;
         AovCombo.AddHandler(PointerWheelChangedEvent, new PointerEventHandler(OnAovWheel), true);
     }
 
@@ -178,6 +180,7 @@ public sealed partial class LayerPanel : UserControl
     // ------------------------------------------------------------------ AOV --
     private void OnAovChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updating) return;
         if (_updating || Send is null || AovCombo.SelectedIndex < 0) return;
         Update(Send(new { cmd = "aov", slot = Slot, index = AovCombo.SelectedIndex }));
         Changed?.Invoke();
@@ -192,6 +195,7 @@ public sealed partial class LayerPanel : UserControl
 
     private void OnAovWheel(object sender, PointerRoutedEventArgs e)
     {
+        if (_updating) return;
         if (AovCombo.IsDropDownOpen) return;  // open list scrolls normally
         _wheel += e.GetCurrentPoint(AovCombo).Properties.MouseWheelDelta;
         while (_wheel >= 120) { StepAov(-1); _wheel -= 120; }
@@ -201,54 +205,77 @@ public sealed partial class LayerPanel : UserControl
 
     private void OnViewChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updating) return;
         if (ViewCombo.SelectedItem is string v) SetLayer(new { view = v });
     }
 
     private void OnModeChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updating) return;
         if (ModeCombo.SelectedIndex >= 0) SetLayer(new { mode = ModeKeys[ModeCombo.SelectedIndex] });
     }
 
     private void OnInputChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updating) return;
         if (InputCombo.SelectedItem is string cs) SetLayer(new { inputSpace = cs });
     }
 
-    private void OnOpacityChanged(object sender, RangeBaseValueChangedEventArgs e) => SetLayer(new { opacity = e.NewValue });
-    private void OnVisibleToggled(object sender, RoutedEventArgs e) => SetLayer(new { visible = VisibleSwitch.IsOn });
+    private void OnOpacityChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_updating) return;
+        SetLayer(new { opacity = e.NewValue });
+    }
+    private void OnVisibleToggled(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        SetLayer(new { visible = VisibleSwitch.IsOn });
+    }
 
     private void OnOffsetChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)
     {
+        if (_updating) return;
         if (!double.IsNaN(e.NewValue)) SetLayer(new { offset = (int)Math.Round(e.NewValue) });
     }
 
     private void OnAlphaChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_updating) return;
         if (AlphaCombo.SelectedIndex < 0) return;
         SetLayer(new { alpha = AlphaCombo.SelectedIndex == 0 ? "" : (string)AlphaCombo.SelectedItem });
     }
 
-    private void OnDepthChanged(object sender, RoutedEventArgs e) =>
+    private void OnDepthChanged(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
         SetLayer(new { depthAuto = DepthAutoSwitch.IsOn, depthInvert = DepthInvertBox.IsChecked == true });
+    }
 
     private void OnDepthValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)
     {
+        if (_updating) return;
         if (double.IsNaN(DepthNearBox.Value) || double.IsNaN(DepthFarBox.Value)) return;
         SetLayer(new { depthNear = DepthNearBox.Value, depthFar = DepthFarBox.Value });
     }
 
     private void OnMotionScaleChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)
     {
+        if (_updating) return;
         if (!double.IsNaN(e.NewValue)) SetLayer(new { motionScale = e.NewValue });
     }
 
     private void OnClearIsolate(object sender, RoutedEventArgs e)
     {
+        if (_updating) return;
         SetLayer(new { isolate = (uint?)null });
         ShowIsolate(null);
     }
 
-    private void OnContactToggled(object sender, RoutedEventArgs e) => SetLayer(new { contactSheet = ContactToggle.IsChecked == true });
+    private void OnContactToggled(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        SetLayer(new { contactSheet = ContactToggle.IsChecked == true });
+    }
     public void ToggleContactSheet() => SetLayer(new { contactSheet = ContactToggle.IsChecked != true });
 
     private void OnRebuildChanged(object sender, SelectionChangedEventArgs e)
@@ -264,8 +291,24 @@ public sealed partial class LayerPanel : UserControl
     }
 
     // --------------------------------------------------------------- header --
-    private void OnOpen(object sender, RoutedEventArgs e) => OpenRequested?.Invoke(Slot);
-    private void OnVersionUp(object sender, RoutedEventArgs e) => VersionRequested?.Invoke(Slot, +1);
-    private void OnVersionDown(object sender, RoutedEventArgs e) => VersionRequested?.Invoke(Slot, -1);
-    private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(Slot);
+    private void OnOpen(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        OpenRequested?.Invoke(Slot);
+    }
+    private void OnVersionUp(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        VersionRequested?.Invoke(Slot, +1);
+    }
+    private void OnVersionDown(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        VersionRequested?.Invoke(Slot, -1);
+    }
+    private void OnClose(object sender, RoutedEventArgs e)
+    {
+        if (_updating) return;
+        CloseRequested?.Invoke(Slot);
+    }
 }

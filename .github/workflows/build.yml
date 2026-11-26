@@ -95,21 +95,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Get-ChildItem build/publish/single | Format-Table Name, Length | Out-String | Tee-Object -FilePath logs/5-app-single.log -Append
 
-      - name: Smoke test (launch and stay up)
+      - name: Smoke test (launch, open two sequences, wipe, snapshot)
         continue-on-error: true
         run: |
           $ErrorActionPreference = 'Continue'
           $log = "logs/6-smoke.log"
+          $samples = "$env:RUNNER_TEMP\samples"
+          $tool = Get-ChildItem build/native-build -Recurse -Filter exrcore_render_test.exe | Select-Object -First 1
+          & $tool.FullName --samples $samples | Tee-Object $log -Append
           foreach ($exe in @("build/publish/ExrCompare/ExrCompare.exe", "build/publish/single/ExrCompare.exe")) {
             if (-not (Test-Path $exe)) { "$exe not built" | Tee-Object $log -Append; continue }
-            $p = Start-Process -FilePath $exe -PassThru
-            Start-Sleep -Seconds 12
-            if ($p.HasExited) { "$exe EXITED early with code $($p.ExitCode)" | Tee-Object $log -Append }
-            else { "$exe running after 12 s (OK)" | Tee-Object $log -Append; Stop-Process -Id $p.Id -Force }
+            $name = if ($exe -match 'single') { 'single' } else { 'folder' }
+            $png = "$env:RUNNER_TEMP\smoke-$name.png"
+            $argList = "`"$samples\a\a.0001.exr`" `"$samples\b\b.0001.exr`" --compare wipe --snapshot `"$png`" --quit"
+            $p = Start-Process -FilePath $exe -ArgumentList $argList -PassThru
+            if (-not $p.WaitForExit(90000)) { "$exe still running after 90 s" | Tee-Object $log -Append; Stop-Process -Id $p.Id -Force }
+            "$exe exit code $($p.ExitCode)" | Tee-Object $log -Append
+            if (Test-Path $png) { "snapshot OK: $((Get-Item $png).Length) bytes" | Tee-Object $log -Append; Copy-Item $png logs/ }
+            else { "NO SNAPSHOT for $exe" | Tee-Object $log -Append }
+            if (Test-Path "$png.json") { Get-Content "$png.json" | Tee-Object $log -Append }
           }
           $err = Join-Path $env:LOCALAPPDATA "ExrCompare\startup-error.txt"
           if (Test-Path $err) { @("--- startup-error.txt") + @(Get-Content $err) | Tee-Object $log -Append }
-          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-3)} -ErrorAction SilentlyContinue |
+          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue |
             Where-Object { $_.LevelDisplayName -eq 'Error' } | Select-Object -First 10 | Format-List TimeCreated, ProviderName, Message |
             Out-String | Tee-Object $log -Append
 

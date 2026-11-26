@@ -77,6 +77,50 @@ public sealed partial class MainWindow
         }
     }
 
+    // ----------------------------------------------------------- command line --
+    /// <summary>
+    /// ExrCompare.exe [pathA] [pathB] [--compare mode] [--snapshot file.png] [--quit]
+    /// Paths open into A then B. With --quit the app writes &lt;snapshot&gt;.json (engine and
+    /// renderer status, for automated tests) and exits.
+    /// </summary>
+    private async void HandleCommandLine()
+    {
+        var args = Environment.GetCommandLineArgs().Skip(1).ToList();
+        if (args.Count == 0) return;
+        string? compare = null, snapshot = null;
+        bool quit = false;
+        int slot = 0;
+        for (int i = 0; i < args.Count; i++)
+        {
+            switch (args[i])
+            {
+                case "--compare" when i + 1 < args.Count: compare = args[++i]; break;
+                case "--snapshot" when i + 1 < args.Count: snapshot = args[++i]; break;
+                case "--quit": quit = true; break;
+                default:
+                    if (slot < 2 && (File.Exists(args[i]) || Directory.Exists(args[i]))) OpenPath(slot++, args[i]);
+                    break;
+            }
+        }
+        if (compare is not null) SetCompare(compare);
+        if (snapshot is null && !quit) return;
+
+        await Task.Delay(2500);  // let the live view draw a few frames
+        var report = new JsonObject
+        {
+            ["status"] = _core.Call(new { cmd = "status" }),
+            ["render"] = _core.Call(new { cmd = "render_status" }),
+            ["ocio"] = _core.Call(new { cmd = "ocio" }),
+        };
+        if (snapshot is not null)
+        {
+            report["snapshot"] = _core.Call(new { cmd = "snapshot", path = snapshot, burnin = new[] { "EXR Compare command-line snapshot" } });
+            try { await File.WriteAllTextAsync(snapshot + ".json", report.ToJsonString(new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { App.LogError("report", ex); }
+        }
+        if (quit) Close();
+    }
+
     // ---------------------------------------------------------------- sessions --
     private async void OnSaveSession(object sender, RoutedEventArgs e) => await SaveSession();
 

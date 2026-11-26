@@ -122,6 +122,7 @@ public sealed partial class MainWindow : Window
         {
             Marshal.Release(unknown);
         }
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, HandleCommandLine);
     }
 
     private int PixelWidth() => Math.Max(1, (int)Math.Round(ViewerArea.ActualWidth * Viewer.CompositionScaleX));

@@ -39,7 +39,15 @@ static std::string u8(const fs::path& p) {
     return std::string(s.begin(), s.end());
 }
 
-int main() {
+int main(int argc, char** argv) {
+    // --samples <dir>: write two small test shots for the app smoke test, then exit.
+    if (argc >= 3 && std::string(argv[1]) == "--samples") {
+        const fs::path dir = argv[2];
+        makeShot(dir / "a", "a.", 1, 10, 256, 128);
+        makeShot(dir / "b", "b.", 1, 10, 256, 128, 0.3f);
+        std::cout << "samples written to " << dir.string() << "\n";
+        return 0;
+    }
     _putenv_s("EXRC_FORCE_WARP", "1");
     TempDir d;
     makeShot(d.path / "a", "a.", 1, 3, 64, 32);
