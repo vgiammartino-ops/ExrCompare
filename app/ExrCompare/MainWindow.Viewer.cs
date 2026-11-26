@@ -47,6 +47,7 @@ public sealed partial class MainWindow
 
     private void ApplyGeometry(JsonObject g)
     {
+        if (!_ready) return;
         if (!ExrCore.Ok(g)) return;
         _rectA = J.Rect(g, "a");
         _rectB = J.Rect(g, "b");
@@ -89,6 +90,7 @@ public sealed partial class MainWindow
 
     private void DrawOverlay()
     {
+        if (!_ready) return;
         Overlay.Children.Clear();
         if (!J.Bool(_status, "hasContent") || OverlaysToggle.IsChecked != true) return;
         var accent = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];

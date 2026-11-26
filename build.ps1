@@ -37,7 +37,7 @@ dotnet publish "$root\app\ExrCompare\ExrCompare.csproj" @common -o "$root\build\
 if ($LASTEXITCODE) { throw "App publish failed" }
 if ($SingleFile) {
     dotnet publish "$root\app\ExrCompare\ExrCompare.csproj" @common -p:PublishSingleFile=true `
-        -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o "$root\build\publish\single"
+        -p:IncludeNativeLibrariesForSelfExtract=true -o "$root\build\publish\single"
     if ($LASTEXITCODE) { throw "Single-file publish failed" }
 }
 Write-Host "`nDone: $root\build\publish\ExrCompare\ExrCompare.exe"

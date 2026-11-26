@@ -18,7 +18,9 @@ namespace ExrCompare;
 /// <summary>Main window: wiring between the WinUI controls and the native engine.</summary>
 public sealed partial class MainWindow : Window
 {
-    private readonly ExrCore _core;
+    // Created before InitializeComponent: XAML fires change handlers while it loads.
+    private readonly ExrCore _core = new(RamPercent(50));
+    private bool _ready;  // false until the constructor has finished wiring everything
     private readonly DispatcherQueueTimer _timer;
     private JsonObject _status = new();
     private JsonObject? _ocio;
@@ -38,8 +40,6 @@ public sealed partial class MainWindow : Window
         AppWindow.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
         AppWindow.TitleBar.ButtonForegroundColor = Colors.White;
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1760, 1040));
-
-        _core = new ExrCore(RamPercent(50));
 
         LayerPanelA.SetSlot(0);
         LayerPanelB.SetSlot(1);
@@ -74,6 +74,7 @@ public sealed partial class MainWindow : Window
             _timer.Stop();
             _core.Dispose();
         };
+        _ready = true;
     }
 
     // ------------------------------------------------------------------ engine --
@@ -128,12 +129,14 @@ public sealed partial class MainWindow : Window
 
     private void OnViewerScaleChanged(SwapChainPanel sender, object args)
     {
+        if (!_ready) return;
         _core.Resize(PixelWidth(), PixelHeight(), sender.CompositionScaleX, sender.CompositionScaleY);
         RefreshGeometry();
     }
 
     private void OnViewerSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (!_ready) return;
         _core.Resize(PixelWidth(), PixelHeight(), Viewer.CompositionScaleX, Viewer.CompositionScaleY);
         // The engine learns the new size on its next frame; re-read geometry shortly after.
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, RefreshGeometry);
@@ -316,6 +319,7 @@ public sealed partial class MainWindow : Window
 
     private void OnTimelineChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
+        if (!_ready) return;
         if (_updating) return;
         Send(new { cmd = "seek", frame = (int)Math.Round(e.NewValue) });
     }
@@ -340,6 +344,7 @@ public sealed partial class MainWindow : Window
 
     private void OnFpsChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!_ready) return;
         if (_updating || FpsCombo.SelectedIndex < 0) return;
         var (n, d) = _fpsOptions[FpsCombo.SelectedIndex];
         Send(new { cmd = "fps", num = n, den = d });
@@ -368,6 +373,7 @@ public sealed partial class MainWindow : Window
     // ---------------------------------------------------------------- compare --
     private void OnCompareBarChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
+        if (!_ready) return;
         if (_updating || sender.SelectedItem is null) return;
         Send(new { cmd = "compare", mode = (string)sender.SelectedItem.Tag });
         AfterChange();
@@ -397,11 +403,13 @@ public sealed partial class MainWindow : Window
 
     private void OnDiffGainChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
+        if (!_ready) return;
         if (!_updating && !double.IsNaN(args.NewValue)) Send(new { cmd = "compare", diffGain = args.NewValue });
     }
 
     private void OnWipeSoftChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
+        if (!_ready) return;
         if (!_updating && !double.IsNaN(args.NewValue)) Send(new { cmd = "wipe", softness = args.NewValue * Scale });
     }
 
@@ -415,6 +423,7 @@ public sealed partial class MainWindow : Window
 
     private void OnLockAovToggled(object sender, RoutedEventArgs e)
     {
+        if (!_ready) return;
         if (!_updating) SetLockAov(LockAovSwitch.IsOn);
     }
 
@@ -429,6 +438,7 @@ public sealed partial class MainWindow : Window
     // ----------------------------------------------------------------- colour --
     private void OnChannelChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!_ready) return;
         if (!_updating && ChannelCombo.SelectedIndex >= 0) Send(new { cmd = "color", channel = ChannelCombo.SelectedIndex });
     }
 
@@ -436,12 +446,14 @@ public sealed partial class MainWindow : Window
 
     private void OnExposureChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
+        if (!_ready) return;
         ExposureText.Text = e.NewValue.ToString("+0.0;-0.0");
         if (!_updating) Send(new { cmd = "color", exposure = e.NewValue });
     }
 
     private void OnGammaChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
+        if (!_ready) return;
         GammaText.Text = e.NewValue.ToString("0.00");
         if (!_updating) Send(new { cmd = "color", gamma = e.NewValue });
     }
@@ -528,6 +540,7 @@ public sealed partial class MainWindow : Window
 
     private void OnDisplayChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!_ready) return;
         if (_updating || DisplayCombo.SelectedItem is not string display) return;
         var r = Send(new { cmd = "color", display });
         _updating = true;
@@ -537,11 +550,13 @@ public sealed partial class MainWindow : Window
 
     private void OnViewChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!_ready) return;
         if (!_updating && ViewCombo.SelectedItem is string view) Send(new { cmd = "color", view });
     }
 
     private void OnLookChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!_ready) return;
         if (_updating || LookCombo.SelectedIndex < 0) return;
         Send(new { cmd = "color", look = LookCombo.SelectedIndex == 0 ? "" : (string)LookCombo.SelectedItem });
     }
@@ -627,6 +642,7 @@ public sealed partial class MainWindow : Window
 
     private void OnPaneChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
+        if (!_ready) return;
         string tag = sender.SelectedItem?.Tag as string ?? "layers";
         LayersPage.Visibility = tag == "layers" ? Visibility.Visible : Visibility.Collapsed;
         InfoPage.Visibility = tag == "info" ? Visibility.Visible : Visibility.Collapsed;

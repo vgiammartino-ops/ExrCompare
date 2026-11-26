@@ -26,6 +26,7 @@ public sealed partial class MainWindow
 
     private void RefreshSidePanels(bool force)
     {
+        if (!_ready) return;
         if (InfoPage.Visibility == Visibility.Visible)
         {
             if (force) RefreshMetadata();
@@ -39,6 +40,7 @@ public sealed partial class MainWindow
 
     private void RefreshStats()
     {
+        if (!_ready) return;
         var r = _core.Call(new { cmd = "stats" });
         var lines = new List<string>();
         string[] ch = { "R", "G", "B", "A" };
@@ -62,6 +64,7 @@ public sealed partial class MainWindow
 
     private void RefreshMetadata()
     {
+        if (!_ready) return;
         int slot = Math.Max(0, MetaSlotButtons.SelectedIndex);
         var r = _core.Call(new { cmd = "metadata", slot });
         _metadataRows = ((r["metadata"] as JsonArray) ?? new JsonArray())
@@ -72,6 +75,7 @@ public sealed partial class MainWindow
 
     private void ApplyMetadataFilter()
     {
+        if (!_ready) return;
         string f = MetaFilter.Text ?? "";
         MetadataList.Items.Clear();
         foreach (var row in _metadataRows.Where(r => f.Length == 0 || r.Contains(f, StringComparison.OrdinalIgnoreCase)))
@@ -81,6 +85,7 @@ public sealed partial class MainWindow
     // ------------------------------------------------------------------ notes --
     private void LoadNote()
     {
+        if (!_ready) return;
         _loadingNote = true;
         NoteBox.Text = _notes.TryGetValue(J.Int(_status, "frame"), out var n) ? n : "";
         _loadingNote = false;
@@ -88,7 +93,7 @@ public sealed partial class MainWindow
 
     private void OnNoteChanged(object sender, TextChangedEventArgs e)
     {
-        if (_loadingNote) return;
+        if (_loadingNote || !_ready) return;
         int frame = J.Int(_status, "frame");
         if (string.IsNullOrWhiteSpace(NoteBox.Text)) _notes.Remove(frame);
         else _notes[frame] = NoteBox.Text;
@@ -100,6 +105,7 @@ public sealed partial class MainWindow
 
     private void RefreshScopes()
     {
+        if (!_ready) return;
         int slot = Math.Max(0, ScopeSlotButtons.SelectedIndex);
         var r = _core.Call(new { cmd = "histogram", slot, bins = 128 });
         HistogramCanvas.Children.Clear();

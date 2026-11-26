@@ -90,7 +90,7 @@ jobs:
           $ErrorActionPreference = 'Continue'
           dotnet publish app/ExrCompare/ExrCompare.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 `
             "-p:ExrCoreDir=$env:GITHUB_WORKSPACE\build\native\bin" -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
             -o build/publish/single 2>&1 | Tee-Object -FilePath logs/5-app-single.log
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Get-ChildItem build/publish/single | Format-Table Name, Length | Out-String | Tee-Object -FilePath logs/5-app-single.log -Append
