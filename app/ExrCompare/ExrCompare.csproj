@@ -13,6 +13,8 @@
     <!-- Unpackaged + self-contained: runs from a folder (or one exe) with nothing to install. -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Generates resources.pri (compiled XAML) for unpackaged apps; also required for single-file. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
     <SelfContained>true</SelfContained>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

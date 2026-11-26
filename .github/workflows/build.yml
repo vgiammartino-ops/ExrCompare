@@ -73,7 +73,7 @@ jobs:
       - name: Test native (engine + headless WARP render)
         run: |
           $ErrorActionPreference = 'Continue'
-          ctest --test-dir build/native-build -C Release --output-on-failure 2>&1 | Tee-Object -FilePath logs/3-native-test.log
+          ctest --test-dir build/native-build -C Release -V 2>&1 | Tee-Object -FilePath logs/3-native-test.log
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Publish app (portable folder)
@@ -107,6 +107,8 @@ jobs:
             if ($p.HasExited) { "$exe EXITED early with code $($p.ExitCode)" | Tee-Object $log -Append }
             else { "$exe running after 12 s (OK)" | Tee-Object $log -Append; Stop-Process -Id $p.Id -Force }
           }
+          $err = Join-Path $env:LOCALAPPDATA "ExrCompare\startup-error.txt"
+          if (Test-Path $err) { @("--- startup-error.txt") + @(Get-Content $err) | Tee-Object $log -Append }
           Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-3)} -ErrorAction SilentlyContinue |
             Where-Object { $_.LevelDisplayName -eq 'Error' } | Select-Object -First 10 | Format-List TimeCreated, ProviderName, Message |
             Out-String | Tee-Object $log -Append
