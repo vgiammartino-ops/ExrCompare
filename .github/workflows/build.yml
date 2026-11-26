@@ -1,0 +1,148 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_COMMIT: 9d1fc4d0609cd98b9ad221f626bf030e856b6345
+  VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-cache,readwrite
+  TRIPLET: x64-windows-static-md
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ env.TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('native/vcpkg.json') }}
+          restore-keys: vcpkg-${{ env.TRIPLET }}-${{ env.VCPKG_COMMIT }}-
+
+      - name: Set up vcpkg
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force logs, vcpkg-cache | Out-Null
+          git clone --quiet https://github.com/microsoft/vcpkg "$env:RUNNER_TEMP\vcpkg"
+          git -C "$env:RUNNER_TEMP\vcpkg" checkout --quiet $env:VCPKG_COMMIT
+          & "$env:RUNNER_TEMP\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+          "VCPKG_ROOT=$env:RUNNER_TEMP\vcpkg" >> $env:GITHUB_ENV
+
+      - name: Configure native (vcpkg builds OpenEXR + OpenColorIO)
+        run: |
+          $ErrorActionPreference = 'Continue'
+          cmake -S native -B build/native-build -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=$env:TRIPLET 2>&1 | Tee-Object -FilePath logs/1-native-configure.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Build native
+        run: |
+          $ErrorActionPreference = 'Continue'
+          cmake --build build/native-build --config Release --parallel 2>&1 | Tee-Object -FilePath logs/2-native-build.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cmake --install build/native-build --config Release --prefix build/native 2>&1 | Tee-Object -FilePath logs/2-native-build.log -Append
+
+      - name: Test native (engine + headless WARP render)
+        run: |
+          $ErrorActionPreference = 'Continue'
+          ctest --test-dir build/native-build -C Release --output-on-failure 2>&1 | Tee-Object -FilePath logs/3-native-test.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Publish app (portable folder)
+        run: |
+          $ErrorActionPreference = 'Continue'
+          dotnet publish app/ExrCompare/ExrCompare.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 `
+            "-p:ExrCoreDir=$env:GITHUB_WORKSPACE\build\native\bin" -o build/publish/ExrCompare 2>&1 | Tee-Object -FilePath logs/4-app-publish.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path build/publish/ExrCompare/exrcore.dll)) { Write-Error "exrcore.dll missing from publish"; exit 1 }
+
+      - name: Publish app (single exe)
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Continue'
+          dotnet publish app/ExrCompare/ExrCompare.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 `
+            "-p:ExrCoreDir=$env:GITHUB_WORKSPACE\build\native\bin" -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true `
+            -o build/publish/single 2>&1 | Tee-Object -FilePath logs/5-app-single.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem build/publish/single | Format-Table Name, Length | Out-String | Tee-Object -FilePath logs/5-app-single.log -Append
+
+      - name: Smoke test (launch and stay up)
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $log = "logs/6-smoke.log"
+          foreach ($exe in @("build/publish/ExrCompare/ExrCompare.exe", "build/publish/single/ExrCompare.exe")) {
+            if (-not (Test-Path $exe)) { "$exe not built" | Tee-Object $log -Append; continue }
+            $p = Start-Process -FilePath $exe -PassThru
+            Start-Sleep -Seconds 12
+            if ($p.HasExited) { "$exe EXITED early with code $($p.ExitCode)" | Tee-Object $log -Append }
+            else { "$exe running after 12 s (OK)" | Tee-Object $log -Append; Stop-Process -Id $p.Id -Force }
+          }
+          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-3)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.LevelDisplayName -eq 'Error' } | Select-Object -First 10 | Format-List TimeCreated, ProviderName, Message |
+            Out-String | Tee-Object $log -Append
+
+      - name: Package
+        run: |
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build/publish/ExrCompare -DestinationPath dist/ExrCompare-portable-x64.zip -CompressionLevel Optimal
+          if (Test-Path build/publish/single/ExrCompare.exe) { Copy-Item build/publish/single/ExrCompare.exe dist/ExrCompare-x64.exe }
+          Get-ChildItem dist | Format-Table Name, Length | Out-String | Tee-Object -FilePath logs/7-package.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ExrCompare-x64
+          path: dist/*
+
+      - name: Update "latest" release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          gh release delete latest --yes --cleanup-tag 2>$null
+          $notes = "Automatic build of ${{ github.sha }}.`n`n- ExrCompare-portable-x64.zip: unzip anywhere and run ExrCompare.exe`n- ExrCompare-x64.exe: single file (unpacks to a temp folder on first run)"
+          gh release create latest (Get-ChildItem dist/*).FullName --prerelease --title "Latest build" --notes $notes --target ${{ github.sha }}
+
+      - name: Publish logs to the ci-logs branch
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $dir = "$env:RUNNER_TEMP\ci-logs"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          if (Test-Path logs) { Copy-Item logs/* $dir -ErrorAction SilentlyContinue }
+          Get-ChildItem build/native-build -Recurse -Filter *.log -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'vcpkg' } |
+            Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName "$dir\vcpkg-$($_.Name)" }
+          Get-ChildItem "$env:VCPKG_ROOT\buildtrees" -Recurse -Filter "*-err.log" -ErrorAction SilentlyContinue |
+            Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName "$dir\vcpkg-$($_.Directory.Name)-$($_.Name)" }
+          "commit ${{ github.sha }}`nrun ${{ github.run_id }}`njob status ${{ job.status }}`n$(Get-Date -Format o)" | Set-Content "$dir\summary.txt"
+          Set-Location $dir
+          git init --quiet -b ci-logs
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add -A
+          git commit --quiet -m "CI logs for ${{ github.sha }}"
+          git push --force --quiet "https://x-access-token:$env:TOKEN@github.com/${{ github.repository }}.git" ci-logs

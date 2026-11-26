@@ -1,0 +1,9 @@
+build/
+dist/
+vcpkg_installed/
+vcpkg-cache/
+logs/
+bin/
+obj/
+.vs/
+*.user

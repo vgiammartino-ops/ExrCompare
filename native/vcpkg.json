@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "exrcompare-native",
+  "version-string": "0.1.0",
+  "builtin-baseline": "9d1fc4d0609cd98b9ad221f626bf030e856b6345",
+  "dependencies": [
+    "imath",
+    "openexr",
+    "opencolorio",
+    "nlohmann-json"
+  ]
+}

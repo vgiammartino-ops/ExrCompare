@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>ExrCompare</RootNamespace>
+    <AssemblyName>ExrCompare</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <!-- Unpackaged + self-contained: runs from a folder (or one exe) with nothing to install. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <Version>0.1.0</Version>
+    <Product>EXR Compare</Product>
+    <!-- Native engine built by CMake (see .github/workflows/build.yml and build.ps1). -->
+    <ExrCoreDir Condition="'$(ExrCoreDir)' == ''">$(MSBuildThisFileDirectory)..\..\build\native\bin</ExrCoreDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(ExrCoreDir)\exrcore.dll" Link="exrcore.dll" CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('$(ExrCoreDir)\exrcore.dll')" />
+  </ItemGroup>
+
+  <Target Name="WarnMissingNative" BeforeTargets="Build" Condition="!Exists('$(ExrCoreDir)\exrcore.dll')">
+    <Warning Text="exrcore.dll not found in $(ExrCoreDir). Build the native engine first (build.ps1)." />
+  </Target>
+</Project>

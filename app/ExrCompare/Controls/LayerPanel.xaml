@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One layer card (A or B) in the Layers pane. Stock Fluent controls only. -->
+<UserControl
+    x:Class="ExrCompare.Controls.LayerPanel"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1" CornerRadius="8" Padding="12">
+        <StackPanel Spacing="10">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="Badge" CornerRadius="4" Padding="8,2" VerticalAlignment="Center"
+                        Background="{ThemeResource AccentFillColorDefaultBrush}">
+                    <TextBlock x:Name="BadgeText" Text="A" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                </Border>
+                <TextBlock x:Name="NameText" Grid.Column="1" Text="Empty" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="OpenButton" Click="OnOpen" ToolTipService.ToolTip="Open sequence">
+                        <SymbolIcon Symbol="OpenFile" />
+                    </Button>
+                    <Button x:Name="VersionDownButton" Click="OnVersionDown" IsEnabled="False"
+                            ToolTipService.ToolTip="Previous version (Alt+Down)">
+                        <FontIcon Glyph="&#xE70D;" FontSize="14" />
+                    </Button>
+                    <Button x:Name="VersionUpButton" Click="OnVersionUp" IsEnabled="False"
+                            ToolTipService.ToolTip="Next version (Alt+Up)">
+                        <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                    </Button>
+                    <Button x:Name="CloseButton" Click="OnClose" IsEnabled="False" ToolTipService.ToolTip="Close layer">
+                        <SymbolIcon Symbol="Cancel" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+            <TextBlock x:Name="InfoText" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.75" TextWrapping="Wrap" />
+
+            <StackPanel x:Name="Body" Spacing="10" Visibility="Collapsed">
+                <ComboBox x:Name="AovCombo" Header="AOV (mouse wheel to switch)" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnAovChanged" />
+                <ComboBox x:Name="ViewCombo" Header="Stereo view" HorizontalAlignment="Stretch" Visibility="Collapsed"
+                          SelectionChanged="OnViewChanged" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ComboBox x:Name="ModeCombo" Header="Show as" HorizontalAlignment="Stretch" SelectionChanged="OnModeChanged">
+                        <x:String>Auto</x:String>
+                        <x:String>Colour</x:String>
+                        <x:String>Raw</x:String>
+                        <x:String>Depth</x:String>
+                        <x:String>Normals</x:String>
+                        <x:String>Motion vectors</x:String>
+                        <x:String>IDs / Cryptomatte</x:String>
+                    </ComboBox>
+                    <ComboBox x:Name="InputCombo" Grid.Column="1" Header="Input colour space" HorizontalAlignment="Stretch"
+                              SelectionChanged="OnInputChanged" />
+                </Grid>
+                <Slider x:Name="OpacitySlider" Header="Opacity (fade)" Minimum="0" Maximum="1" StepFrequency="0.01"
+                        Value="1" ValueChanged="OnOpacityChanged" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ToggleSwitch x:Name="VisibleSwitch" Header="Visible" IsOn="True" Toggled="OnVisibleToggled" />
+                    <NumberBox x:Name="OffsetBox" Grid.Column="1" Header="Frame offset" Value="0"
+                               SpinButtonPlacementMode="Compact" SmallChange="1" LargeChange="10"
+                               ValueChanged="OnOffsetChanged" />
+                </Grid>
+                <ComboBox x:Name="AlphaCombo" Header="Alpha channel" HorizontalAlignment="Stretch"
+                          SelectionChanged="OnAlphaChanged" />
+
+                <StackPanel x:Name="DepthPanel" Spacing="8" Visibility="Collapsed">
+                    <ToggleSwitch x:Name="DepthAutoSwitch" Header="Depth: auto range" IsOn="True" Toggled="OnDepthChanged" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <NumberBox x:Name="DepthNearBox" Header="Near" ValueChanged="OnDepthValueChanged" />
+                        <NumberBox x:Name="DepthFarBox" Grid.Column="1" Header="Far" ValueChanged="OnDepthValueChanged" />
+                    </Grid>
+                    <CheckBox x:Name="DepthInvertBox" Content="Invert (near = white)" Click="OnDepthChanged" />
+                </StackPanel>
+                <NumberBox x:Name="MotionScaleBox" Header="Motion vector scale" Value="0.05" SmallChange="0.01"
+                           SpinButtonPlacementMode="Compact" Visibility="Collapsed" ValueChanged="OnMotionScaleChanged" />
+                <Grid x:Name="IsolatePanel" ColumnSpacing="8" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="IsolateText" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <Button Grid.Column="1" Content="Clear" Click="OnClearIsolate" />
+                </Grid>
+
+                <ToggleButton x:Name="ContactToggle" HorizontalAlignment="Stretch" Click="OnContactToggled"
+                              ToolTipService.ToolTip="All AOVs of this frame as a grid; click a tile to view it (T)">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SymbolIcon Symbol="ViewAll" />
+                        <TextBlock Text="AOV contact sheet" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <Expander Header="Beauty rebuild check" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <StackPanel Spacing="8">
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" Opacity="0.75"
+                                   Text="Sums the ticked AOVs. Difference shows |beauty - sum|: black means the AOVs rebuild the beauty exactly." />
+                        <ComboBox x:Name="BeautyCombo" Header="Beauty" HorizontalAlignment="Stretch"
+                                  SelectionChanged="OnRebuildChanged" />
+                        <RadioButtons x:Name="RebuildModeButtons" MaxColumns="3" SelectedIndex="0"
+                                      SelectionChanged="OnRebuildChanged">
+                            <x:String>Off</x:String>
+                            <x:String>Difference</x:String>
+                            <x:String>Sum</x:String>
+                        </RadioButtons>
+                        <StackPanel x:Name="RebuildList" Spacing="2" />
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>
