@@ -43,6 +43,7 @@ const char* aovKindName(AovKind k) {
         case AovKind::UV: return "uv";
         case AovKind::Crypto: return "crypto";
         case AovKind::Id: return "id";
+        case AovKind::Matte: return "matte";
         case AovKind::Generic: return "generic";
     }
     return "color";

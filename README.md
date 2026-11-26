@@ -40,6 +40,7 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
   - motion vectors: scaled around mid grey
   - IDs and Cryptomatte: random colours; hover shows object names; Alt+click isolates an object
   - other data (P, UV): raw
+  - puzzle mattes (`PuzzleMatte_ObjectID`, `PuzzleMatte_MaterialID`, any name starting `PuzzleMatte`): raw, no OCIO, so R, G and B stay pure
 - **AOV contact sheet:** every AOV of the frame in a grid; click a tile to view it.
 - **Beauty rebuild check:** sum chosen AOVs and show |beauty - sum|.
 - **Highlights:** NaN/Inf (magenta) and negative values (cyan), false-colour exposure map, alpha matte overlay, R/G/B/A/luminance channels.
@@ -47,7 +48,7 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
   - Hover reads the pixel's R, G, B and A in scene linear, unclamped (values above 1.0 show as is), plus a swatch of the displayed colour.
   - Ctrl+drag draws a red box that stays sampled after you let go; Ctrl+click pins one pixel. The box follows pan and zoom and is re-read on every frame and AOV.
   - The Pixel tab shows current, min, max, average and median per channel, with NaN/Inf counts. Esc or Clear sample removes the box.
-  - A readout bar under the viewer shows `x= y= WxH  R G B A [swatch]`, like Nuke's viewer.
+  - A fixed two-row readout bar under the viewer (one row per input, like Nuke): resolution, bbox, channels, `x= y= WxH`, R G B A, swatch, H S V and L.
 - Per-channel frame statistics.
 - **Histogram and waveform** scopes.
 - **Metadata panel:** every EXR header attribute. A data-window outline is drawn on the image.

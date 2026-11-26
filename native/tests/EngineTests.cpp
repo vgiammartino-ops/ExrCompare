@@ -84,6 +84,12 @@ TEST_CASE("Rational frame rates") {
 // ------------------------------------------------------------------------- layers --
 TEST_CASE("AOV kinds are classified from names") {
     CHECK(classifyAov("Z") == AovKind::Depth);
+    CHECK(classifyAov("PuzzleMatte_ObjectID") == AovKind::Matte);
+    CHECK(classifyAov("PuzzleMatte_MaterialID") == AovKind::Matte);
+    CHECK(classifyAov("puzzleMatte01") == AovKind::Matte);
+    CHECK(classifyAov("objectID") == AovKind::Id);
+    CHECK(classifyAov("cryptomatte_00") == AovKind::Crypto);
+    CHECK(classifyAov("beauty") == AovKind::Color);
     CHECK(classifyAov("depth") == AovKind::Depth);
     CHECK(classifyAov("N") == AovKind::Normal);
     CHECK(classifyAov("normals") == AovKind::Normal);

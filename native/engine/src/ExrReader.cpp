@@ -370,6 +370,9 @@ AovKind classifyAov(const std::string& name) {
         return false;
     };
     if (has("crypto")) return AovKind::Crypto;
+    // Puzzle mattes ("PuzzleMatte_ObjectID", "PuzzleMatte_MaterialID") hold pure R/G/B masks.
+    // Checked before the ID rule, which "ObjectID" would otherwise hit (random hash colours).
+    if (has("puzzlematte") || tokenIs({"matte", "rgbmatte", "holdout"})) return AovKind::Matte;
     if (has("depth") || tokenIs({"z", "zdepth"})) return AovKind::Depth;
     if (has("normal") || tokenIs({"n", "nn", "nworld", "ncam"})) return AovKind::Normal;
     if (has("motion") || has("velocity") || tokenIs({"mv", "vel", "mvec"})) return AovKind::Motion;

@@ -121,7 +121,7 @@
                                       KeyboardAcceleratorTextOverride="Q" Click="OnOverlaysMenu" />
                 <ToggleMenuFlyoutItem x:Name="HudMenuItem" Text="Image info (HUD)" IsChecked="True" Click="OnHudMenu" />
                 <ToggleMenuFlyoutItem x:Name="DataWindowMenuItem" Text="Data window outline" IsChecked="True" Click="OnOverlaysMenu" />
-                <ToggleMenuFlyoutItem x:Name="SidePaneMenuItem" Text="Side pane" IsChecked="True" Click="OnSidePaneMenu" />
+                <ToggleMenuFlyoutItem x:Name="SidePaneMenuItem" Text="Side pane" IsChecked="False" Click="OnSidePaneMenu" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Contact sheet (layer A)" KeyboardAcceleratorTextOverride="T" Click="OnContactSheetA" />
             </MenuBarItem>
@@ -145,22 +145,34 @@
                       VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled"
                       Background="{ThemeResource LayerFillColorDefaultBrush}">
             <StackPanel Orientation="Horizontal" Spacing="10" Padding="8,4">
-                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <TextBlock Text="AOV" VerticalAlignment="Center" Opacity="0.8" />
-                    <controls:WheelComboBox x:Name="ToolbarAovCombo" Width="260" VerticalAlignment="Center" IsEnabled="False"
-                                            SelectionChanged="OnToolbarAovChanged"
-                                            ToolTipService.ToolTip="AOV of layer A. Mouse wheel steps one AOV; B follows while Lock AOV is on." />
-                </StackPanel>
-                <controls:WheelComboBox x:Name="CompareCombo" Width="150" VerticalAlignment="Center" SelectedIndex="0"
-                                        SelectionChanged="OnCompareComboChanged" ToolTipService.ToolTip="Compare mode (W wipe, S stack, D difference)">
-                    <ComboBoxItem Content="A only" Tag="a" />
-                    <ComboBoxItem Content="B only" Tag="b" />
-                    <ComboBoxItem Content="Wipe" Tag="wipe" />
-                    <ComboBoxItem Content="Stack (fade)" Tag="stack" />
-                    <ComboBoxItem Content="Difference" Tag="difference" />
-                    <ComboBoxItem Content="Side by side" Tag="sidebyside" />
-                    <ComboBoxItem Content="Over / under" Tag="overunder" />
-                </controls:WheelComboBox>
+                <!-- Nuke viewer input bar: [A  aov v] [compare on/off  mode v] [B  aov v] -->
+                <Border BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" CornerRadius="4"
+                        Padding="3,2" VerticalAlignment="Center" Background="{ThemeResource ControlFillColorTransparentBrush}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Button x:Name="ShowAButton" Content="A" Style="{StaticResource InputLetterStyle}" Click="OnShowA"
+                                ToolTipService.ToolTip="Show A only" />
+                        <controls:WheelComboBox x:Name="ToolbarAovCombo" Width="190" VerticalAlignment="Center" IsEnabled="False"
+                                                SelectionChanged="OnToolbarAovChanged"
+                                                ToolTipService.ToolTip="AOV of A. Mouse wheel steps one AOV; B follows while Lock AOV is on." />
+                        <ToggleButton x:Name="CompareToggle" Style="{StaticResource IconToggleStyle}" Click="OnCompareToggle"
+                                      ToolTipService.ToolTip="Compare on / off (off shows A)">
+                            <FontIcon Glyph="&#xEC11;" FontSize="16" />
+                        </ToggleButton>
+                        <controls:WheelComboBox x:Name="CompareCombo" Width="128" VerticalAlignment="Center" SelectedIndex="0"
+                                                SelectionChanged="OnCompareComboChanged" ToolTipService.ToolTip="Compare mode (W wipe, S stack, D difference)">
+                            <ComboBoxItem Content="wipe" Tag="wipe" />
+                            <ComboBoxItem Content="stack" Tag="stack" />
+                            <ComboBoxItem Content="difference" Tag="difference" />
+                            <ComboBoxItem Content="side by side" Tag="sidebyside" />
+                            <ComboBoxItem Content="over / under" Tag="overunder" />
+                        </controls:WheelComboBox>
+                        <Button x:Name="ShowBButton" Content="B" Style="{StaticResource InputLetterStyle}" Click="OnShowB"
+                                ToolTipService.ToolTip="Show B only" />
+                        <controls:WheelComboBox x:Name="ToolbarAovComboB" Width="190" VerticalAlignment="Center" IsEnabled="False"
+                                                SelectionChanged="OnToolbarAovChangedB"
+                                                ToolTipService.ToolTip="AOV of B. Mouse wheel steps one AOV." />
+                    </StackPanel>
+                </Border>
                 <Button Click="OnSwap" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Swap A and B (Enter)">
                     <FontIcon Glyph="&#xE8AB;" FontSize="16" />
                 </Button>
@@ -270,16 +282,21 @@
             </Grid>
 
             <!-- Pixel readout (Nuke viewer info bar): position, sample size, R G B A, display swatch. -->
-            <Border x:Name="ReadoutBar" Grid.Row="1" Background="#FF161616" Padding="10,5" MinHeight="34"
-                    BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
-                <Grid ColumnSpacing="12">
+            <Border x:Name="ReadoutBar" Grid.Row="1" Background="Black" Padding="8,3" Height="62"
+                    BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    ToolTipService.ToolTip="Hover to read pixels. Ctrl+drag: sample a box. Ctrl+click: pin a pixel. Esc: clear.">
+                <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel x:Name="ReadoutRows" Spacing="3" VerticalAlignment="Center" />
-                    <TextBlock x:Name="ReadoutHint" VerticalAlignment="Center" Opacity="0.55" FontSize="13"
-                               Text="Hover to read pixels.  Ctrl+drag: sample a box.  Ctrl+click: pin a pixel.  Esc: clear." />
+                    <!-- Always two fixed rows (A, B) so the bar never changes height. -->
+                    <Grid x:Name="ReadoutRows" RowSpacing="2" VerticalAlignment="Center">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="26" />
+                            <RowDefinition Height="26" />
+                        </Grid.RowDefinitions>
+                    </Grid>
                     <Button x:Name="ClearSampleButton" Grid.Column="1" Style="{StaticResource IconButtonStyle}" Visibility="Collapsed"
                             Click="OnClearSample" ToolTipService.ToolTip="Clear pixel sample (Esc)">
                         <FontIcon Glyph="&#xE894;" FontSize="16" />
@@ -287,8 +304,10 @@
                 </Grid>
             </Border>
             </Grid>
+            </Border>
+            </Grid>
 
-            <Border x:Name="SidePane" Grid.Column="1" Width="372" BorderThickness="1,0,0,0"
+            <Border x:Name="SidePane" Grid.Column="1" Width="372" Visibility="Collapsed" BorderThickness="1,0,0,0"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                     Background="{ThemeResource LayerFillColorDefaultBrush}">
                 <Grid>

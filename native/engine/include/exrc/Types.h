@@ -68,7 +68,8 @@ private:
 using FramePtr = std::shared_ptr<const Frame>;
 
 // What kind of data an AOV holds; decides the default viewer mode.
-enum class AovKind : uint8_t { Color, Depth, Normal, Motion, Position, UV, Crypto, Id, Generic };
+// Matte: RGB puzzle/holdout mattes (pure 0/1 per channel), shown raw so R, G and B stay pure.
+enum class AovKind : uint8_t { Color, Depth, Normal, Motion, Position, UV, Crypto, Id, Generic, Matte };
 const char* aovKindName(AovKind k);
 
 // A viewable AOV / layer inside the EXR.

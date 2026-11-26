@@ -470,22 +470,24 @@ public sealed partial class MainWindow
         RefreshAnalyzer();
     }
 
-    // Nuke-style readout bar: "x=3336 y=332 4x4   0.03076 0.03363 0.06787 1.00000 [swatch]".
+    // Nuke viewer info bar, one fixed row per input:
+    // "A:  5952x3140  bbox -4 -4 5960 3148  channels: rgba      x=3040 y=536 4x4  r g b a [swatch]  H: S: V:  L:"
     private sealed class ReadoutRow
     {
-        public StackPanel Root = null!;
-        public TextBlock Pos = null!, Size = null!;
+        public Grid Root = null!;
+        public TextBlock Info = null!, Pos = null!, Hsv = null!;
         public TextBlock[] Values = new TextBlock[4];
         public Border Swatch = null!;
     }
 
     private readonly ReadoutRow[] _readout = new ReadoutRow[2];
+    private readonly string[] _readoutInfo = { "", "" };
 
     private static readonly Windows.UI.Color[] ChannelColors =
     {
-        Windows.UI.Color.FromArgb(255, 255, 98, 98),
-        Windows.UI.Color.FromArgb(255, 110, 225, 110),
-        Windows.UI.Color.FromArgb(255, 105, 160, 255),
+        Windows.UI.Color.FromArgb(255, 255, 70, 70),
+        Windows.UI.Color.FromArgb(255, 60, 220, 90),
+        Windows.UI.Color.FromArgb(255, 80, 150, 255),
         Windows.UI.Color.FromArgb(255, 235, 235, 235),
     };
 
@@ -493,44 +495,56 @@ public sealed partial class MainWindow
 
     private void BuildReadout()
     {
+        var grey = Windows.UI.Color.FromArgb(255, 215, 215, 215);
         for (int s = 0; s < 2; s++)
         {
-            var row = new ReadoutRow { Root = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, Visibility = Visibility.Collapsed } };
-            TextBlock T(double width, Windows.UI.Color? color = null, bool right = false) => new()
+            var row = new ReadoutRow { Root = new Grid { ColumnSpacing = 14 } };
+            // label | info (fills) | position + size | R | G | B | A | swatch | HSV L
+            foreach (var w in new[] { 26.0, -1, 200, 86, 86, 86, 86, 40, 330 })
+                row.Root.ColumnDefinitions.Add(new ColumnDefinition { Width = w < 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
+            TextBlock T(int col, Windows.UI.Color color, bool right = false)
             {
-                FontFamily = Mono, FontSize = 15, Width = width, VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = right ? TextAlignment.Right : TextAlignment.Left,
-                Foreground = new SolidColorBrush(color ?? Windows.UI.Color.FromArgb(255, 200, 200, 200)),
-            };
-            var badge = new Border
-            {
-                Width = 22, Height = 20, CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center,
-                Background = (Brush)Application.Current.Resources[s == 0 ? "AccentFillColorDefaultBrush" : "SystemFillColorCautionBrush"],
-                Child = new TextBlock
+                var t = new TextBlock
                 {
-                    Text = s == 0 ? "A" : "B", FontWeight = FontWeights.SemiBold, FontSize = 13, Foreground = new SolidColorBrush(Colors.Black),
-                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                },
-            };
-            row.Root.Children.Add(badge);
-            row.Pos = T(170);
-            row.Size = T(90);
-            row.Root.Children.Add(row.Pos);
-            row.Root.Children.Add(row.Size);
-            for (int c = 0; c < 4; c++)
-            {
-                row.Values[c] = T(92, ChannelColors[c], right: true);
-                row.Root.Children.Add(row.Values[c]);
+                    FontFamily = Mono, FontSize = 15, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.Clip,
+                    TextAlignment = right ? TextAlignment.Right : TextAlignment.Left, Foreground = new SolidColorBrush(color),
+                };
+                Grid.SetColumn(t, col);
+                row.Root.Children.Add(t);
+                return t;
             }
-            row.Swatch = new Border
-            {
-                Width = 34, Height = 18, VerticalAlignment = VerticalAlignment.Center, BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 90, 90, 90)),
-            };
+            T(0, grey).Text = s == 0 ? "A:" : "B:";
+            row.Info = T(1, grey);
+            row.Pos = T(2, grey);
+            for (int c = 0; c < 4; c++) row.Values[c] = T(3 + c, ChannelColors[c], right: true);
+            row.Swatch = new Border { Width = 40, Height = 18, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(row.Swatch, 7);
             row.Root.Children.Add(row.Swatch);
+            row.Hsv = T(8, grey);
+            Grid.SetRow(row.Root, s);
             _readout[s] = row;
             ReadoutRows.Children.Add(row.Root);
         }
+    }
+
+    /// <summary>Left part of a readout row: resolution, data window and channels of the shown AOV.</summary>
+    private void SetReadoutInfo(int slot, JsonObject layer)
+    {
+        if (!J.Bool(layer, "loaded"))
+        {
+            _readoutInfo[slot] = "";
+        }
+        else
+        {
+            var dw = layer["dataWindow"] as JsonArray;
+            string bbox = dw is { Count: 4 } ? $"  bbox {dw[0]} {dw[1]} {dw[2]} {dw[3]}" : "";
+            var aovs = layer["aovs"] as JsonArray;
+            int aov = J.Int(layer, "aov");
+            string ch = aovs is not null && aov >= 0 && aov < aovs.Count ? J.Str(aovs[aov], "channels") : "";
+            _readoutInfo[slot] = $"{J.Int(layer, "width")}x{J.Int(layer, "height")}{bbox}{(ch.Length > 0 ? "  channels: " + ch : "")}";
+        }
+        if (_readout[0] is null) BuildReadout();
+        _readout[slot].Info.Text = _readoutInfo[slot];
     }
 
     private void ShowReadout(JsonObject? r, bool hovering)
@@ -541,30 +555,55 @@ public sealed partial class MainWindow
         for (int s = 0; s < 2; s++)
         {
             var row = _readout[s];
+            row.Info.Text = _readoutInfo[s];
             var l = r?[s == 0 ? "a" : "b"];
             var px = hovering ? l?["pixel"] : null;
             var reg = l?["region"];
             if (px is not null)
             {
                 row.Pos.Text = $"x={J.Int(px, "x")} y={J.Int(px, "y")}";
-                row.Size.Text = "";
                 SetValues(row, px["rgba"] as JsonArray, px["display"] as JsonArray);
             }
             else if (reg is not null)
             {
-                row.Pos.Text = $"x={J.Int(reg, "x")} y={J.Int(reg, "y")}";
-                row.Size.Text = $"{J.Int(reg, "w")}x{J.Int(reg, "h")}";
+                row.Pos.Text = $"x={J.Int(reg, "x")} y={J.Int(reg, "y")} {J.Int(reg, "w")}x{J.Int(reg, "h")}";
                 SetValues(row, reg["mean"] as JsonArray, reg["display"] as JsonArray);
             }
-            row.Root.Visibility = px is not null || reg is not null ? Visibility.Visible : Visibility.Collapsed;
+            else
+            {
+                // Keep the row (fixed height); just blank the values.
+                row.Pos.Text = "";
+                SetValues(row, null, null);
+            }
         }
-        ReadoutHint.Visibility = _readout.All(x => x.Root.Visibility == Visibility.Collapsed) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static void SetValues(ReadoutRow row, JsonArray? v, JsonArray? display)
     {
-        for (int c = 0; c < 4; c++) row.Values[c].Text = Fmt(v?[c]);
+        for (int c = 0; c < 4; c++) row.Values[c].Text = v is null ? "" : Fmt(v[c]);
         row.Swatch.Background = SwatchBrush(display);
+        row.Hsv.Text = v is null ? "" : HsvL(v);
+    }
+
+    /// <summary>Nuke's readout tail: HSV of the linear RGB, and Rec.709 luminance.</summary>
+    private static string HsvL(JsonArray v)
+    {
+        double Get(int i) => v[i] is JsonValue jv && jv.TryGetValue(out double d) ? d : double.NaN;
+        double r = Get(0), g = Get(1), b = Get(2);
+        if (double.IsNaN(r) || double.IsNaN(g) || double.IsNaN(b)) return "";
+        double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;
+        double h = 0;
+        if (d > 0)
+        {
+            if (max == r) h = 60 * (((g - b) / d) % 6);
+            else if (max == g) h = 60 * ((b - r) / d + 2);
+            else h = 60 * ((r - g) / d + 4);
+            if (h < 0) h += 360;
+        }
+        double sat = max > 0 ? d / max : 0;
+        double lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        var ci = CultureInfo.InvariantCulture;
+        return $"H:{h.ToString("0", ci)} S:{sat.ToString("0.00", ci)} V:{max.ToString("0.00", ci)}  L: {lum.ToString("0.00000", ci)}";
     }
 
     /// <summary>Scene-linear values, unclamped, five decimals like Nuke's viewer.</summary>

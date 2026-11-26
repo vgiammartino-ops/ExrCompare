@@ -182,8 +182,7 @@ public sealed partial class MainWindow : Window
         LoopToggle.IsChecked = J.Bool(_status, "loop", true);
         LoopMenuItem.IsChecked = LoopToggle.IsChecked == true;
         string compare = J.Str(_status, "compare", "a");
-        int ci = CompareCombo.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => (string)i.Tag == compare);
-        if (ci >= 0 && CompareCombo.SelectedIndex != ci) CompareCombo.SelectedIndex = ci;
+        SyncCompareBar(compare);
         DiffGainBox.Visibility = compare == "difference" ? Visibility.Visible : Visibility.Collapsed;
         WipeSoftBox.Visibility = compare == "wipe" ? Visibility.Visible : Visibility.Collapsed;
         _updating = false;
@@ -376,38 +375,55 @@ public sealed partial class MainWindow : Window
     {
         if (!_ready) return;
         if (_updating || CompareCombo.SelectedItem is not ComboBoxItem item) return;
-        Send(new { cmd = "compare", mode = (string)item.Tag });
-        AfterChange();
+        SetCompare((string)item.Tag);  // picking a mode turns compare on
     }
 
-    // ------------------------------------------------------- toolbar AOV menu --
-    private List<string> _toolbarAovs = new();
+    private void OnCompareToggle(object sender, RoutedEventArgs e) =>
+        SetCompare(CompareToggle.IsChecked == true ? (string)((ComboBoxItem)CompareCombo.SelectedItem).Tag : "a");
 
-    /// <summary>Mirrors layer A's AOV list and selection into the toolbar menu.</summary>
+    private void OnShowA(object sender, RoutedEventArgs e) => SetCompare("a");
+    private void OnShowB(object sender, RoutedEventArgs e) => SetCompare("b");
+
+    /// <summary>Reflects the engine's compare mode in the A / compare / B bar.</summary>
+    private void SyncCompareBar(string compare)
+    {
+        bool single = compare is "a" or "b";
+        CompareToggle.IsChecked = !single;
+        int ci = CompareCombo.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => (string)i.Tag == compare);
+        if (ci >= 0 && CompareCombo.SelectedIndex != ci) CompareCombo.SelectedIndex = ci;
+        ShowAButton.Opacity = compare == "b" ? 0.45 : 1.0;
+        ShowBButton.Opacity = compare == "a" ? 0.45 : 1.0;
+    }
+
+    // ------------------------------------------------------- toolbar AOV menus --
+    private readonly List<string>[] _toolbarAovs = { new(), new() };
+
+    /// <summary>Mirrors a layer's AOV list and selection into its toolbar menu and the readout bar.</summary>
     private void OnLayerPanelUpdated(int slot, JsonObject layer)
     {
-        if (slot != 0) return;
+        SetReadoutInfo(slot, layer);
+        var combo = slot == 0 ? ToolbarAovCombo : ToolbarAovComboB;
         bool prev = _updating;
         _updating = true;
         try
         {
             var aovs = (layer["aovs"] as JsonArray) ?? new JsonArray();
             var names = J.Bool(layer, "loaded") ? aovs.Select(a => J.Str(a, "name")).ToList() : new List<string>();
-            if (!names.SequenceEqual(_toolbarAovs))
+            if (!names.SequenceEqual(_toolbarAovs[slot]))
             {
-                _toolbarAovs = names;
-                ToolbarAovCombo.Items.Clear();
-                foreach (var a in aovs)
+                _toolbarAovs[slot] = names;
+                combo.Items.Clear();
+                foreach (var a in names.Count > 0 ? aovs : new JsonArray())
                 {
                     string name = J.Str(a, "name"), kind = J.Str(a, "kind");
                     var item = new ComboBoxItem { Content = kind == "color" ? name : $"{name}   ({kind})", Tag = name };
                     ToolTipService.SetToolTip(item, J.Str(a, "channels"));
-                    ToolbarAovCombo.Items.Add(item);
+                    combo.Items.Add(item);
                 }
             }
-            ToolbarAovCombo.IsEnabled = names.Count > 0;
+            combo.IsEnabled = names.Count > 0;
             int index = J.Int(layer, "aov");
-            ToolbarAovCombo.SelectedIndex = index >= 0 && index < names.Count ? index : -1;
+            combo.SelectedIndex = index >= 0 && index < names.Count ? index : -1;
         }
         finally
         {
@@ -415,11 +431,16 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnToolbarAovChanged(object sender, SelectionChangedEventArgs e)
+    private void OnToolbarAovChanged(object sender, SelectionChangedEventArgs e) => ToolbarAovChanged(0);
+    private void OnToolbarAovChangedB(object sender, SelectionChangedEventArgs e) => ToolbarAovChanged(1);
+
+    private void ToolbarAovChanged(int slot)
     {
-        if (!_ready || _updating || ToolbarAovCombo.SelectedIndex < 0) return;
-        LayerPanelA.Update(Send(new { cmd = "aov", slot = 0, index = ToolbarAovCombo.SelectedIndex }));
-        if (J.Bool(_status, "lockAov", true)) LayerPanelB.Update(_core.Call(new { cmd = "layer", slot = 1 }));
+        var combo = slot == 0 ? ToolbarAovCombo : ToolbarAovComboB;
+        if (!_ready || _updating || combo.SelectedIndex < 0) return;
+        (slot == 0 ? LayerPanelA : LayerPanelB).Update(Send(new { cmd = "aov", slot, index = combo.SelectedIndex }));
+        if (J.Bool(_status, "lockAov", true))
+            (slot == 0 ? LayerPanelB : LayerPanelA).Update(_core.Call(new { cmd = "layer", slot = 1 - slot }));
         AfterChange();
     }
 

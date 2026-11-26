@@ -43,6 +43,7 @@ LayerMode defaultMode(AovKind k) {
         case AovKind::Motion: return LayerMode::Motion;
         case AovKind::Crypto:
         case AovKind::Id: return LayerMode::Id;
+        case AovKind::Matte: return LayerMode::Raw;  // no OCIO: 1,0,0 shows as pure red
         default: return LayerMode::Raw;
     }
 }
