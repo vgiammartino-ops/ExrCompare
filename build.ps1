@@ -36,7 +36,7 @@ $common = @("-c", "Release", "-r", "win-x64", "--self-contained", "-p:Platform=x
 dotnet publish "$root\app\ExrCompare\ExrCompare.csproj" @common -o "$root\build\publish\ExrCompare"
 if ($LASTEXITCODE) { throw "App publish failed" }
 if ($SingleFile) {
-    dotnet publish "$root\app\ExrCompare\ExrCompare.csproj" @common -p:PublishSingleFile=true `
+    dotnet publish "$root\app\ExrCompare\ExrCompare.csproj" @common -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true `
         -p:IncludeNativeLibrariesForSelfExtract=true -o "$root\build\publish\single"
     if ($LASTEXITCODE) { throw "Single-file publish failed" }
 }
