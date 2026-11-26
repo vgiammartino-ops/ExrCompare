@@ -20,8 +20,8 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
 - **Lock AOV:** A and B switch AOV together.
 - **Versions:** step a layer up or down through `v###` versions on disk (Alt+Up / Alt+Down).
 
-**Compare modes**
-- A, B
+**Compare modes** (toolbar dropdown, next to the AOV dropdown; the mouse wheel steps one entry per notch)
+- A only, B only
 - **Wipe:** a Nuke-style widget. Drag the centre to move it, the long handle to rotate, and the arc handle to dissolve B into A. Edge softness is adjustable.
 - **Stack:** B over A using the layer opacities.
 - **Difference:** |A-B| in scene linear, with gain.
@@ -43,15 +43,20 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
 - **AOV contact sheet:** every AOV of the frame in a grid; click a tile to view it.
 - **Beauty rebuild check:** sum chosen AOVs and show |beauty - sum|.
 - **Highlights:** NaN/Inf (magenta) and negative values (cyan), false-colour exposure map, alpha matte overlay, R/G/B/A/luminance channels.
-- **Pixel probe** for A and B at once, a **region average** (Ctrl+drag), and per-channel frame statistics.
+- **Pixel Analyzer** (Nuke's pixel sampler), for A and B at once:
+  - Hover reads the pixel's R, G, B and A in scene linear, unclamped (values above 1.0 show as is), plus a swatch of the displayed colour.
+  - Ctrl+drag draws a red box that stays sampled after you let go; Ctrl+click pins one pixel. The box follows pan and zoom and is re-read on every frame and AOV.
+  - The Pixel tab shows current, min, max, average and median per channel, with NaN/Inf counts. Esc or Clear sample removes the box.
+  - A readout bar under the viewer shows `x= y= WxH  R G B A [swatch]`, like Nuke's viewer.
+- Per-channel frame statistics.
 - **Histogram and waveform** scopes.
 - **Metadata panel:** every EXR header attribute. A data-window outline is drawn on the image.
 - **Stereo:** multi-view EXR view selector.
 
 **Review workflow**
-- Annotations (pen) and per-frame notes, exported as CSV.
-- Snapshots (PNG/JPEG) with burn-in text and annotations.
-- Sessions (`.exrcs`) save layers, AOVs, colour settings, wipe, in/out, notes and annotations.
+- Per-frame notes, exported as CSV.
+- Snapshots (PNG/JPEG) with burn-in text.
+- Sessions (`.exrcs`) save layers, AOVs, colour settings, wipe, in/out and notes.
 
 **Playback**
 - Exact 23.976 / 29.97 timing, loop on/off, in/out points, play backward, frame stepping.

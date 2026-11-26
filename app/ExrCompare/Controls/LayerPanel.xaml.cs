@@ -16,7 +16,6 @@ public sealed partial class LayerPanel : UserControl
     private static readonly string[] ModeKeys = { "auto", "color", "raw", "depth", "normal", "motion", "id" };
 
     private bool _updating;
-    private int _wheel;
     private List<string> _aovNames = new();
     private List<string> _colorSpaces = new();
     private List<string> _channels = new();
@@ -28,13 +27,14 @@ public sealed partial class LayerPanel : UserControl
     public Action<int>? OpenRequested { get; set; }
     public Action<int, int>? VersionRequested { get; set; }
     public Action<int>? CloseRequested { get; set; }
+    /// <summary>Raised after every refresh with the "layer" reply (the toolbar AOV menu mirrors it).</summary>
+    public Action<int, JsonObject>? Updated { get; set; }
 
     public LayerPanel()
     {
         _updating = true;  // XAML fires change handlers while it loads; ignore them
         InitializeComponent();
         _updating = false;
-        AovCombo.AddHandler(PointerWheelChangedEvent, new PointerEventHandler(OnAovWheel), true);
     }
 
     public void SetSlot(int slot)
@@ -133,7 +133,7 @@ public sealed partial class LayerPanel : UserControl
             ModeCombo.SelectedIndex = Math.Max(0, Array.IndexOf(ModeKeys, J.Str(layer, "mode", "auto")));
             InputCombo.SelectedIndex = _colorSpaces.IndexOf(J.Str(layer, "inputSpace"));
             OpacitySlider.Value = J.Num(layer, "opacity", 1);
-            VisibleSwitch.IsOn = J.Bool(layer, "visible", true);
+            VisibleSwitch.IsChecked = J.Bool(layer, "visible", true);
             OffsetBox.Value = J.Int(layer, "offset");
 
             var channels = (layer["channels"] as JsonArray)?.Select(c => c!.GetValue<string>()).ToList() ?? new();
@@ -149,10 +149,10 @@ public sealed partial class LayerPanel : UserControl
 
             string effective = J.Str(layer, "effectiveMode");
             DepthPanel.Visibility = effective == "depth" ? Visibility.Visible : Visibility.Collapsed;
-            DepthAutoSwitch.IsOn = J.Bool(layer, "depthAuto", true);
+            DepthAutoSwitch.IsChecked = J.Bool(layer, "depthAuto", true);
             DepthNearBox.Value = J.Num(layer, "depthNear");
             DepthFarBox.Value = J.Num(layer, "depthFar", 1);
-            DepthNearBox.IsEnabled = DepthFarBox.IsEnabled = !DepthAutoSwitch.IsOn;
+            DepthNearBox.IsEnabled = DepthFarBox.IsEnabled = DepthAutoSwitch.IsChecked != true;
             DepthInvertBox.IsChecked = J.Bool(layer, "depthInvert");
             MotionScaleBox.Visibility = effective == "motion" ? Visibility.Visible : Visibility.Collapsed;
             MotionScaleBox.Value = J.Num(layer, "motionScale", 0.05);
@@ -169,6 +169,7 @@ public sealed partial class LayerPanel : UserControl
         {
             _updating = false;
         }
+        Updated?.Invoke(Slot, layer);
     }
 
     public void ShowIsolate(string? text)
@@ -191,16 +192,6 @@ public sealed partial class LayerPanel : UserControl
         if (Send is null || !HasSequence) return;
         Update(Send(new { cmd = "aov", slot = Slot, delta }));
         Changed?.Invoke();
-    }
-
-    private void OnAovWheel(object sender, PointerRoutedEventArgs e)
-    {
-        if (_updating) return;
-        if (AovCombo.IsDropDownOpen) return;  // open list scrolls normally
-        _wheel += e.GetCurrentPoint(AovCombo).Properties.MouseWheelDelta;
-        while (_wheel >= 120) { StepAov(-1); _wheel -= 120; }
-        while (_wheel <= -120) { StepAov(+1); _wheel += 120; }
-        e.Handled = true;
     }
 
     private void OnViewChanged(object sender, SelectionChangedEventArgs e)
@@ -229,7 +220,7 @@ public sealed partial class LayerPanel : UserControl
     private void OnVisibleToggled(object sender, RoutedEventArgs e)
     {
         if (_updating) return;
-        SetLayer(new { visible = VisibleSwitch.IsOn });
+        SetLayer(new { visible = VisibleSwitch.IsChecked == true });
     }
 
     private void OnOffsetChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)
@@ -248,7 +239,7 @@ public sealed partial class LayerPanel : UserControl
     private void OnDepthChanged(object sender, RoutedEventArgs e)
     {
         if (_updating) return;
-        SetLayer(new { depthAuto = DepthAutoSwitch.IsOn, depthInvert = DepthInvertBox.IsChecked == true });
+        SetLayer(new { depthAuto = DepthAutoSwitch.IsChecked == true, depthInvert = DepthInvertBox.IsChecked == true });
     }
 
     private void OnDepthValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)

@@ -29,8 +29,7 @@ EXRC_API void exrc_destroy(ExrcHandle* h);
 /* Runs a JSON command/query. Writes the JSON result (NUL-terminated) into out and returns its
  * length without the NUL. If the return value >= capacity the result was truncated: call again
  * with a larger buffer. Extra commands handled here (not by the engine):
- *   {"cmd":"snapshot","path":"C:/x.png","width":w,"height":h,"burnin":["line",...],
- *    "annotations":[{"points":[[x,y],...],"color":[r,g,b],"width":px}]}   (points in layer A image pixels)
+ *   {"cmd":"snapshot","path":"C:/x.png","width":w,"height":h,"burnin":["line",...]}
  *   {"cmd":"render_status"}  -> {"error": "...", "shaderError": "...", "attached": bool} */
 EXRC_API int exrc_call(ExrcHandle* h, const char* json, char* out, int capacity);
 

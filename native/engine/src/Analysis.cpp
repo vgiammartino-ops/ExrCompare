@@ -17,6 +17,8 @@ RegionStats regionStats(const Frame& f, int x0, int y0, int x1, int y1) {
     y0 = std::clamp(y0, 0, f.height - 1);
     y1 = std::clamp(y1, 0, f.height - 1);
     std::array<double, 4> sum{};
+    std::array<std::vector<float>, 4> values;
+    for (auto& v : values) v.reserve(size_t(x1 - x0 + 1) * size_t(y1 - y0 + 1));
     s.min.fill(std::numeric_limits<double>::infinity());
     s.max.fill(-std::numeric_limits<double>::infinity());
     for (int y = y0; y <= y1; ++y) {
@@ -37,6 +39,7 @@ RegionStats regionStats(const Frame& f, int x0, int y0, int x1, int y1) {
             ++s.count;
             for (int c = 0; c < 4; ++c) {
                 sum[c] += v[c];
+                values[c].push_back(v[c]);
                 s.min[c] = std::min(s.min[c], double(v[c]));
                 s.max[c] = std::max(s.max[c], double(v[c]));
             }
@@ -45,6 +48,10 @@ RegionStats regionStats(const Frame& f, int x0, int y0, int x1, int y1) {
     for (int c = 0; c < 4; ++c) {
         if (s.count) {
             s.mean[c] = sum[c] / s.count;
+            auto& v = values[c];
+            auto mid = v.begin() + v.size() / 2;
+            std::nth_element(v.begin(), mid, v.end());
+            s.median[c] = *mid;
         } else {
             s.min[c] = s.max[c] = 0;
         }

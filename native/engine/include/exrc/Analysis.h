@@ -7,7 +7,7 @@ namespace exrc {
 
 struct RegionStats {
     int count = 0;  // finite pixels
-    std::array<double, 4> mean{}, min{}, max{};
+    std::array<double, 4> mean{}, min{}, max{}, median{};
     uint64_t nan = 0, inf = 0;
 };
 // Stored-pixel rectangle (inclusive), clipped to the frame.

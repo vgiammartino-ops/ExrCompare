@@ -138,7 +138,6 @@ public sealed partial class MainWindow
             ["status"] = _core.Call(new { cmd = "status" }),
             ["ocio"] = J.Str(_ocio, "source"),
             ["layers"] = new JsonArray(_core.Call(new { cmd = "layer", slot = 0 }), _core.Call(new { cmd = "layer", slot = 1 })),
-            ["annotations"] = JsonSerializer.SerializeToNode(_annotations.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value)),
             ["notes"] = JsonSerializer.SerializeToNode(_notes.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value)),
         };
         await File.WriteAllTextAsync(file.Path, session.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -189,10 +188,6 @@ public sealed partial class MainWindow
             Send(new { cmd = "inout", @in = J.Int(st, "in"), @out = J.Int(st, "out") });
             Send(new { cmd = "seek", frame = J.Int(st, "frame") });
 
-            _annotations.Clear();
-            if (s["annotations"] is JsonObject ann)
-                foreach (var kv in ann)
-                    _annotations[int.Parse(kv.Key)] = kv.Value.Deserialize<List<Stroke>>() ?? new List<Stroke>();
             _notes.Clear();
             if (s["notes"] is JsonObject notes)
                 foreach (var kv in notes)
@@ -242,13 +237,7 @@ public sealed partial class MainWindow
         burnIn.Add($"{J.Str(_status, "compare")}   {J.Str(color, "display")} / {J.Str(color, "view")}   exposure {J.Num(color, "exposure"):+0.0;-0.0}");
         if (_notes.TryGetValue(frame, out var note)) burnIn.Add("Note: " + note.Replace('\n', ' '));
 
-        var strokes = _annotations.TryGetValue(frame, out var list) ? list : new List<Stroke>();
-        var cmd = new
-        {
-            cmd = "snapshot", path = file.Path, burnin = burnIn,
-            annotations = strokes.Select(s => new { points = s.Points, color = s.Color, width = s.Width }),
-        };
-        var r = Send(cmd);
+        var r = Send(new { cmd = "snapshot", path = file.Path, burnin = burnIn });
         if (ExrCore.Ok(r))
         {
             ErrorBar.Severity = InfoBarSeverity.Success;
@@ -272,12 +261,11 @@ public sealed partial class MainWindow
         if (file is null) return;
         var layers = _status["layers"] as JsonArray;
         string a = J.Str(layers?[0], "pattern"), b = J.Str(layers?[1], "pattern");
-        var sb = new StringBuilder("frame,layer_a,layer_b,annotations,note\n");
-        foreach (int f in _notes.Keys.Union(_annotations.Keys).OrderBy(f => f))
+        var sb = new StringBuilder("frame,layer_a,layer_b,note\n");
+        foreach (int f in _notes.Keys.OrderBy(f => f))
         {
-            string note = _notes.TryGetValue(f, out var n) ? n : "";
-            int count = _annotations.TryGetValue(f, out var s) ? s.Count : 0;
-            sb.Append($"{f},\"{a}\",\"{b}\",{count},\"{note.Replace("\"", "\"\"")}\"\n");
+            string note = _notes[f];
+            sb.Append($"{f},\"{a}\",\"{b}\",\"{note.Replace("\"", "\"\"")}\"\n");
         }
         await File.WriteAllTextAsync(file.Path, sb.ToString(), Encoding.UTF8);
     }
@@ -313,7 +301,7 @@ public sealed partial class MainWindow
                         "Left / Right       Step one frame\n" +
                         "Home / End         First / last frame\n" +
                         "I / O / Shift+I    In point / out point / clear\n" +
-                        "Page Up / Down     Previous / next AOV (mouse wheel over the AOV list too)\n" +
+                        "Page Up / Down     Previous / next AOV (or mouse wheel over the toolbar AOV menu)\n" +
                         "W                  Toggle wipe\n" +
                         "Enter              Swap A and B\n" +
                         "D / S              Difference / stack\n" +
@@ -325,8 +313,9 @@ public sealed partial class MainWindow
                         "Mouse wheel        Zoom at the pointer;  drag: pan\n" +
                         "Q                  Overlays on / off\n" +
                         "T                  Contact sheet of A's AOVs\n" +
-                        "P                  Annotate (pen)\n" +
-                        "Ctrl+drag          Region average (Info pane)\n" +
+                        "Ctrl+drag          Pixel Analyzer: sample a box (stays until cleared)\n" +
+                        "Ctrl+click         Pixel Analyzer: pin one pixel\n" +
+                        "Esc                Clear the pixel sample\n" +
                         "Alt+click          Isolate Cryptomatte / ID object\n" +
                         "Ctrl+O / Ctrl+Shift+O   Open into A / B\n" +
                         "Ctrl+E             Export snapshot\n" +

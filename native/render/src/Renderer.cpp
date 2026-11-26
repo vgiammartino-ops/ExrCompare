@@ -51,6 +51,36 @@ float4 OCIO_Display(float4 c)
 }
 )HLSL";
 
+// OCIO's HLSL samples its LUTs with Texture.Sample(), which needs screen-space derivatives and so
+// can't sit inside dynamic branches. LUTs have a single mip level, so SampleLevel(.., 0) is
+// identical and lets the compositor skip work per pixel.
+std::string explicitLod(const std::string& code) {
+    std::string out;
+    out.reserve(code.size() + 64);
+    size_t pos = 0;
+    while (true) {
+        const size_t hit = code.find(".Sample(", pos);
+        if (hit == std::string::npos) {
+            out.append(code, pos, std::string::npos);
+            break;
+        }
+        out.append(code, pos, hit - pos);
+        out += ".SampleLevel(";
+        size_t i = hit + 8;
+        int depth = 1;
+        const size_t argsStart = i;
+        while (i < code.size() && depth > 0) {
+            if (code[i] == '(') ++depth;
+            else if (code[i] == ')') --depth;
+            if (depth > 0) ++i;
+        }
+        out.append(code, argsStart, i - argsStart);
+        out += ", 0)";
+        pos = i + 1;
+    }
+    return out;
+}
+
 DXGI_FORMAT formatFor(const Frame& f) {
     if (f.format == PixelFormat::Half) return f.channels == 1 ? DXGI_FORMAT_R16_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT;
     return f.channels == 1 ? DXGI_FORMAT_R32_FLOAT : DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -169,9 +199,9 @@ bool Renderer::ensureProgram(const std::shared_ptr<const ShaderProgram>& program
 
     std::string source = kCompositorHeader;
     if (program) {
-        source += program->inputA.code;
-        source += program->inputB.code;
-        source += program->display.code;
+        source += explicitLod(program->inputA.code);
+        source += explicitLod(program->inputB.code);
+        source += explicitLod(program->display.code);
     } else {
         source += kFallbackOcio;
     }

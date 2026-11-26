@@ -170,26 +170,50 @@ LayerOut EvalLayer(Texture2D<float4> tex, float2 p, float4 rect, uint4 L, float4
     return o;
 }
 
+LayerOut NoLayer()
+{
+    LayerOut o;
+    o.disp = float3(0, 0, 0);
+    o.lin = float3(0, 0, 0);
+    o.valid = false;
+    o.colorMode = false;
+    return o;
+}
+
 float4 PSMain(float4 pos : SV_Position) : SV_Target
 {
     float2 p = pos.xy;
-    LayerOut A = EvalLayer(TexA, p, rectA, layerA, paramsA, extraA, true);
-    LayerOut B = EvalLayer(TexB, p, rectB, layerB, paramsB, extraB, false);
-    float3 bg = background.rgb;
-    float3 aCol = A.valid ? lerp(bg, A.disp, paramsA.x) : bg;  // opacity fades towards the background
-    float3 bCol = B.valid ? lerp(bg, B.disp, paramsB.x) : bg;
     uint mode = modes.x;
+    float3 bg = background.rgb;
     float3 outc = bg;
+    LayerOut A = NoLayer();
+    LayerOut B = NoLayer();
 
-    if (mode == 2u)  // wipe
+    if (mode == 2u)  // wipe: only evaluate the side(s) this pixel shows (halves the OCIO cost)
     {
         float2 n = float2(cos(wipe.z), sin(wipe.z));
         float d = dot(p - wipe.xy, n);
         float t = wipe.w > 0.0 ? smoothstep(-wipe.w, wipe.w, d) : step(0.0, d);
         float wB = lerp(misc.x, 1.0, t);  // the mix (arc) handle dissolves B into A's side
+        [branch] if (wB < 1.0) A = EvalLayer(TexA, p, rectA, layerA, paramsA, extraA, true);
+        [branch] if (wB > 0.0 || !A.valid) B = EvalLayer(TexB, p, rectB, layerB, paramsB, extraB, false);
+        [branch] if (!B.valid && wB > 0.0 && !(wB < 1.0)) A = EvalLayer(TexA, p, rectA, layerA, paramsA, extraA, true);
+        float3 aCol = A.valid ? lerp(bg, A.disp, paramsA.x) : bg;
+        float3 bCol = B.valid ? lerp(bg, B.disp, paramsB.x) : bg;
         float3 left = A.valid ? aCol : bCol;
         float3 right = B.valid ? bCol : aCol;
         outc = lerp(left, right, wB);
+        float noiseW = frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453) - 0.5;
+        return float4(outc + noiseW / 255.0, 1.0);
+    }
+
+    A = EvalLayer(TexA, p, rectA, layerA, paramsA, extraA, true);
+    B = EvalLayer(TexB, p, rectB, layerB, paramsB, extraB, false);
+    float3 aCol = A.valid ? lerp(bg, A.disp, paramsA.x) : bg;  // opacity fades towards the background
+    float3 bCol = B.valid ? lerp(bg, B.disp, paramsB.x) : bg;
+
+    if (false)
+    {
     }
     else if (mode == 3u)  // stack: B over A
     {

@@ -109,6 +109,24 @@ TEST_CASE("Session: transport, offsets, probe, stats, histogram, waveform, metad
     CHECK(md["metadata"].size() > 3);
     json geo = call(s, {{"cmd", "geometry"}});
     CHECK(geo["a"].is_array() && geo["dataWindowA"].is_array());
+
+    // Pixel Analyzer: pinned single pixel, then a box; stays until cleared.
+    json px = call(s, {{"cmd", "sample_pixel"}, {"x", 15.0}, {"y", 15.0}});  // pixel (1,1)
+    CHECK(px["regionActive"].get<bool>());
+    CHECK_EQ(px["a"]["region"]["w"].get<int>(), 1);
+    CHECK_EQ(px["a"]["region"]["x"].get<int>(), 1);
+    json box = call(s, {{"cmd", "sample_region"}, {"x0", 0.0}, {"y0", 0.0}, {"x1", 80.0}, {"y1", 40.0}});
+    CHECK_EQ(box["a"]["region"]["w"].get<int>(), 8);
+    CHECK_EQ(box["a"]["region"]["h"].get<int>(), 4);
+    CHECK_EQ(box["a"]["region"]["count"].get<int>(), 32);
+    CHECK_NEAR(box["a"]["region"]["median"][1].get<double>(), 0.5, 1e-3);
+    CHECK(box["a"]["region"]["display"].size() == 3);
+    json an = call(s, {{"cmd", "analyzer"}, {"x", 8.5}, {"y", 4.5}});
+    CHECK(an["a"]["pixel"].is_object() && an["a"]["region"].is_object());
+    CHECK(call(s, {{"cmd", "geometry"}})["region"].is_array());
+    call(s, {{"cmd", "clear_region"}});
+    CHECK(!call(s, {{"cmd", "analyzer"}})["a"].contains("region"));
+    CHECK(call(s, {{"cmd", "wipe"}, {"x", 0.3}})["ok"].get<bool>());
 }
 
 TEST_CASE("Session: contact sheet, rebuild check, proxy, cache modes, versions, swap, OCIO") {

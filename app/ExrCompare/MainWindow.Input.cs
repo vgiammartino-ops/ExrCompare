@@ -51,10 +51,6 @@ public sealed partial class MainWindow
             case VirtualKey.M: ToggleMatte(); break;
             case VirtualKey.Q: SetOverlays(OverlaysToggle.IsChecked != true); break;
             case VirtualKey.T: LayerPanelA.ToggleContactSheet(); break;
-            case VirtualKey.P:
-                PenToggle.IsChecked = PenToggle.IsChecked != true;
-                PenMenuItem.IsChecked = PenToggle.IsChecked == true;
-                break;
             case VirtualKey.I:
                 if (shift) Send(new { cmd = "clear_inout" });
                 else OnSetIn(this, new RoutedEventArgs());
@@ -64,7 +60,8 @@ public sealed partial class MainWindow
             case VirtualKey.E when ctrl: _ = Snapshot(); break;
             case VirtualKey.F11: ToggleFullScreen(); break;
             case VirtualKey.Escape:
-                if (AppWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen) ToggleFullScreen();
+                if (SampleActive) ClearSample();
+                else if (AppWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen) ToggleFullScreen();
                 else handled = false;
                 break;
             default: handled = false; break;

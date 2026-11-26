@@ -24,6 +24,21 @@ public:
     virtual HRESULT STDMETHODCALLTYPE SetSwapChain(IDXGISwapChain* swapChain) = 0;
 };
 
+// True when two render states would draw exactly the same picture (lets the render thread idle).
+static bool sameLayer(const LayerRender& a, const LayerRender& b) {
+    return a.frame == b.frame && a.present == b.present && a.visible == b.visible && a.rect.x0 == b.rect.x0 &&
+           a.rect.y0 == b.rect.y0 && a.rect.x1 == b.rect.x1 && a.rect.y1 == b.rect.y1 && a.mode == b.mode &&
+           a.opacity == b.opacity && a.depthNear == b.depthNear && a.depthFar == b.depthFar &&
+           a.depthInvert == b.depthInvert && a.motionScale == b.motionScale && a.isolateId == b.isolateId &&
+           a.hasIsolate == b.hasIsolate;
+}
+static bool sameState(const RenderState& a, const RenderState& b) {
+    return a.hasContent == b.hasContent && sameLayer(a.a, b.a) && sameLayer(a.b, b.b) && a.compare == b.compare &&
+           a.wipeX == b.wipeX && a.wipeY == b.wipeY && a.wipeAngle == b.wipeAngle && a.wipeMix == b.wipeMix &&
+           a.wipeSoftness == b.wipeSoftness && a.diffGain == b.diffGain && a.exposure == b.exposure &&
+           a.gamma == b.gamma && a.channel == b.channel && a.flags == b.flags && a.program == b.program;
+}
+
 struct ExrcHandle {
     std::unique_ptr<Session> session;
 
@@ -42,6 +57,8 @@ struct ExrcHandle {
     std::unique_ptr<Renderer> still;
 
     void renderLoop() {
+        RenderState last;
+        bool hasLast = false;
         while (running) {
             if (HANDLE w = renderer->frameLatencyWaitable()) WaitForSingleObjectEx(w, 100, TRUE);
             if (!running) break;
@@ -59,8 +76,14 @@ struct ExrcHandle {
             }
             try {
                 if (resize) renderer->resize(UINT(w), UINT(h), sx, sy);
-                const RenderState rs = session->update(Clock::now(), int(renderer->width()), int(renderer->height()));
+                RenderState rs = session->update(Clock::now(), int(renderer->width()), int(renderer->height()));
+                if (!resize && hasLast && sameState(rs, last)) {
+                    Sleep(2);  // nothing changed: keep the last picture, don't burn the GPU
+                    continue;
+                }
                 renderer->render(rs);
+                last = std::move(rs);
+                hasLast = true;
                 const std::string se = renderer->lastShaderError();
                 std::lock_guard lock(m);
                 shaderError = se;
@@ -98,23 +121,6 @@ struct ExrcHandle {
             std::wstring ws(size_t(n), L'\0');
             MultiByteToWideChar(CP_UTF8, 0, s.c_str(), int(s.size()), ws.data(), n);
             ov.burnIn.push_back(ws);
-        }
-        // Annotation points are in layer A image pixels: map them through A's rectangle.
-        const LayerRender& la = rs.a.present ? rs.a : rs.b;
-        const double fw = la.frame ? std::max(1, la.frame->fullWidth) : 1, fh = la.frame ? std::max(1, la.frame->fullHeight) : 1;
-        for (const auto& a : j.value("annotations", json::array())) {
-            Stroke s;
-            const auto c = a.value("color", json::array({1.0, 0.2, 0.2}));
-            s.r = c[0].get<float>();
-            s.g = c[1].get<float>();
-            s.b = c[2].get<float>();
-            s.width = a.value("width", 3.0f) * float(std::max(1.0, w / 1920.0));
-            for (const auto& p : a.value("points", json::array())) {
-                const double x = la.rect.x0 + p[0].get<double>() / fw * (la.rect.x1 - la.rect.x0);
-                const double y = la.rect.y0 + p[1].get<double>() / fh * (la.rect.y1 - la.rect.y0);
-                s.points.push_back({float(x), float(y)});
-            }
-            ov.strokes.push_back(std::move(s));
         }
         drawOverlay(tex.Get(), ov);
         const std::vector<uint8_t> pixels = still->readback(tex.Get(), UINT(w), UINT(h));

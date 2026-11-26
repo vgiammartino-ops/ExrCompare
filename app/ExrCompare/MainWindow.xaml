@@ -3,7 +3,7 @@
     EXR Compare main window. Layout, top to bottom:
       title bar | menu bar | viewer toolbar (compare mode, colour) | viewer + side pane | timeline | transport
     Stock WinUI 3 controls and Segoe Fluent Icons throughout. The only drawn elements are the viewer
-    overlays (wipe handles, data-window outlines, annotations, contact-sheet labels).
+    overlays (wipe handles, data-window outlines, Pixel Analyzer box, contact-sheet labels).
 -->
 <Window
     x:Class="ExrCompare.MainWindow"
@@ -117,7 +117,7 @@
                     <MenuFlyoutItem.Icon><SymbolIcon Symbol="FullScreen" /></MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator />
-                <ToggleMenuFlyoutItem x:Name="OverlaysMenuItem" Text="Overlays (wipe handles, outlines, notes)" IsChecked="True"
+                <ToggleMenuFlyoutItem x:Name="OverlaysMenuItem" Text="Overlays (wipe handles, outlines, sample box)" IsChecked="True"
                                       KeyboardAcceleratorTextOverride="Q" Click="OnOverlaysMenu" />
                 <ToggleMenuFlyoutItem x:Name="HudMenuItem" Text="Image info (HUD)" IsChecked="True" Click="OnHudMenu" />
                 <ToggleMenuFlyoutItem x:Name="DataWindowMenuItem" Text="Data window outline" IsChecked="True" Click="OnOverlaysMenu" />
@@ -126,10 +126,10 @@
                 <MenuFlyoutItem Text="Contact sheet (layer A)" KeyboardAcceleratorTextOverride="T" Click="OnContactSheetA" />
             </MenuBarItem>
             <MenuBarItem Title="Tools">
-                <ToggleMenuFlyoutItem x:Name="PenMenuItem" Text="Annotate (pen)" KeyboardAcceleratorTextOverride="P" Click="OnPenMenu" />
-                <MenuFlyoutItem Text="Clear annotations on this frame" Click="OnClearAnnotations" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="Region sampler: Ctrl+drag on the image" IsEnabled="False" />
+                <MenuFlyoutItem Text="Pixel Analyzer" Click="OnShowPixelPane" />
+                <MenuFlyoutItem Text="Clear pixel sample" KeyboardAcceleratorTextOverride="Esc" Click="OnClearSample" />
+                <MenuFlyoutItem Text="Sample a box: Ctrl+drag on the image" IsEnabled="False" />
+                <MenuFlyoutItem Text="Pin one pixel: Ctrl+click" IsEnabled="False" />
                 <MenuFlyoutItem Text="Isolate Cryptomatte ID: Alt+click" IsEnabled="False" />
             </MenuBarItem>
             <MenuBarItem Title="Help">
@@ -145,24 +145,34 @@
                       VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled"
                       Background="{ThemeResource LayerFillColorDefaultBrush}">
             <StackPanel Orientation="Horizontal" Spacing="10" Padding="8,4">
-                <SelectorBar x:Name="CompareBar" SelectionChanged="OnCompareBarChanged">
-                    <SelectorBarItem Text="A" Tag="a" ToolTipService.ToolTip="Layer A" />
-                    <SelectorBarItem Text="B" Tag="b" ToolTipService.ToolTip="Layer B" />
-                    <SelectorBarItem Text="Wipe" Tag="wipe" ToolTipService.ToolTip="Wipe (W): drag centre to move, long handle to rotate, arc to dissolve" />
-                    <SelectorBarItem Text="Stack" Tag="stack" ToolTipService.ToolTip="B over A using the layers' opacity (fade)" />
-                    <SelectorBarItem Text="Difference" Tag="difference" ToolTipService.ToolTip="|A - B| in scene linear" />
-                    <SelectorBarItem Text="Side by side" Tag="sidebyside" />
-                    <SelectorBarItem Text="Over / under" Tag="overunder" />
-                </SelectorBar>
-                <Button Click="OnSwap" ToolTipService.ToolTip="Swap A and B (Enter)" VerticalAlignment="Center">
-                    <SymbolIcon Symbol="Switch" />
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Text="AOV" VerticalAlignment="Center" Opacity="0.8" />
+                    <controls:WheelComboBox x:Name="ToolbarAovCombo" Width="260" VerticalAlignment="Center" IsEnabled="False"
+                                            SelectionChanged="OnToolbarAovChanged"
+                                            ToolTipService.ToolTip="AOV of layer A. Mouse wheel steps one AOV; B follows while Lock AOV is on." />
+                </StackPanel>
+                <controls:WheelComboBox x:Name="CompareCombo" Width="150" VerticalAlignment="Center" SelectedIndex="0"
+                                        SelectionChanged="OnCompareComboChanged" ToolTipService.ToolTip="Compare mode (W wipe, S stack, D difference)">
+                    <ComboBoxItem Content="A only" Tag="a" />
+                    <ComboBoxItem Content="B only" Tag="b" />
+                    <ComboBoxItem Content="Wipe" Tag="wipe" />
+                    <ComboBoxItem Content="Stack (fade)" Tag="stack" />
+                    <ComboBoxItem Content="Difference" Tag="difference" />
+                    <ComboBoxItem Content="Side by side" Tag="sidebyside" />
+                    <ComboBoxItem Content="Over / under" Tag="overunder" />
+                </controls:WheelComboBox>
+                <Button Click="OnSwap" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Swap A and B (Enter)">
+                    <FontIcon Glyph="&#xE8AB;" FontSize="16" />
                 </Button>
-                <NumberBox x:Name="DiffGainBox" Header="" PlaceholderText="Gain" Value="1" Minimum="0.01" SmallChange="1"
-                           SpinButtonPlacementMode="Compact" Width="96" VerticalAlignment="Center" Visibility="Collapsed"
-                           ToolTipService.ToolTip="Difference gain" ValueChanged="OnDiffGainChanged" />
-                <NumberBox x:Name="WipeSoftBox" PlaceholderText="Softness" Value="0" Minimum="0" SmallChange="2"
-                           SpinButtonPlacementMode="Compact" Width="104" VerticalAlignment="Center" Visibility="Collapsed"
-                           ToolTipService.ToolTip="Wipe edge softness (pixels)" ValueChanged="OnWipeSoftChanged" />
+                <!-- Fixed-width slot so the toolbar never shifts when these appear. -->
+                <Grid Width="112" VerticalAlignment="Center">
+                    <NumberBox x:Name="DiffGainBox" PlaceholderText="Gain" Value="1" Minimum="0.01" SmallChange="1"
+                               SpinButtonPlacementMode="Compact" Visibility="Collapsed"
+                               ToolTipService.ToolTip="Difference gain" ValueChanged="OnDiffGainChanged" />
+                    <NumberBox x:Name="WipeSoftBox" PlaceholderText="Softness" Value="0" Minimum="0" SmallChange="2"
+                               SpinButtonPlacementMode="Compact" Visibility="Collapsed"
+                               ToolTipService.ToolTip="Wipe edge softness (pixels)" ValueChanged="OnWipeSoftChanged" />
+                </Grid>
                 <Border Width="1" Margin="4,6" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
                 <ComboBox x:Name="ChannelCombo" Width="132" SelectedIndex="0" VerticalAlignment="Center"
@@ -191,33 +201,29 @@
                 </StackPanel>
                 <Border Width="1" Margin="4,6" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
-                <ComboBox x:Name="DisplayCombo" Width="190" VerticalAlignment="Center" SelectionChanged="OnDisplayChanged"
+                <ComboBox x:Name="DisplayCombo" Width="180" VerticalAlignment="Center" SelectionChanged="OnDisplayChanged"
                           ToolTipService.ToolTip="OCIO display" />
-                <ComboBox x:Name="ViewCombo" Width="230" VerticalAlignment="Center" SelectionChanged="OnViewChanged"
+                <ComboBox x:Name="ViewCombo" Width="320" VerticalAlignment="Center" SelectionChanged="OnViewChanged"
                           ToolTipService.ToolTip="OCIO view" />
                 <ComboBox x:Name="LookCombo" Width="140" VerticalAlignment="Center" SelectionChanged="OnLookChanged"
                           ToolTipService.ToolTip="OCIO look" Visibility="Collapsed" />
                 <Border Width="1" Margin="4,6" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
-                <ToggleButton x:Name="FalseColorToggle" Click="OnColorFlagsToggle" VerticalAlignment="Center"
+                <ToggleButton x:Name="FalseColorToggle" Style="{StaticResource IconToggleStyle}" Click="OnColorFlagsToggle" VerticalAlignment="Center"
                               ToolTipService.ToolTip="False colour: exposure heat map (+-6 stops around 18% grey)">
                     <FontIcon Glyph="&#xE790;" FontSize="16" />
                 </ToggleButton>
-                <ToggleButton x:Name="NanToggle" Click="OnColorFlagsToggle" VerticalAlignment="Center"
+                <ToggleButton x:Name="NanToggle" Style="{StaticResource IconToggleStyle}" Click="OnColorFlagsToggle" VerticalAlignment="Center"
                               ToolTipService.ToolTip="Highlight NaN / Inf (magenta) and negative values (cyan)">
                     <FontIcon Glyph="&#xE7BA;" FontSize="16" />
                 </ToggleButton>
-                <ToggleButton x:Name="MatteToggle" Click="OnColorFlagsToggle" VerticalAlignment="Center"
+                <ToggleButton x:Name="MatteToggle" Style="{StaticResource IconToggleStyle}" Click="OnColorFlagsToggle" VerticalAlignment="Center"
                               ToolTipService.ToolTip="Alpha matte overlay (M)">
-                    <SymbolIcon Symbol="Crop" />
+                    <FontIcon Glyph="&#xE7A8;" FontSize="16" />
                 </ToggleButton>
-                <ToggleButton x:Name="ProxyToggle" Click="OnProxyToggle" VerticalAlignment="Center"
+                <ToggleButton x:Name="ProxyToggle" Style="{StaticResource IconToggleStyle}" Click="OnProxyToggle" VerticalAlignment="Center"
                               ToolTipService.ToolTip="Half-resolution proxy (uses mip level 1 when the EXR has one)">
-                    <SymbolIcon Symbol="ZoomOut" />
-                </ToggleButton>
-                <ToggleButton x:Name="PenToggle" Click="OnPenToggle" VerticalAlignment="Center"
-                              ToolTipService.ToolTip="Annotate (P)">
-                    <SymbolIcon Symbol="Edit" />
+                    <FontIcon Glyph="&#xE71F;" FontSize="16" />
                 </ToggleButton>
             </StackPanel>
         </ScrollViewer>
@@ -229,6 +235,11 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
+            <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid x:Name="ViewerArea" Background="Black" IsTabStop="True"
                   PointerPressed="OnViewerPointerPressed" PointerMoved="OnViewerPointerMoved"
                   PointerReleased="OnViewerPointerReleased" PointerExited="OnViewerPointerExited"
@@ -255,11 +266,26 @@
                 </Border>
                 <ProgressRing x:Name="LoadingRing" Width="20" Height="20" Margin="10" HorizontalAlignment="Right"
                               VerticalAlignment="Top" IsActive="False" />
-                <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="8" Padding="8,3" CornerRadius="4"
-                        Background="{ThemeResource SmokeFillColorDefaultBrush}" IsHitTestVisible="False">
-                    <TextBlock x:Name="ProbeText" FontFamily="Cascadia Mono, Consolas" FontSize="12" />
-                </Border>
                 <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" Title="Problem" VerticalAlignment="Top" Margin="48,8" />
+            </Grid>
+
+            <!-- Pixel readout (Nuke viewer info bar): position, sample size, R G B A, display swatch. -->
+            <Border x:Name="ReadoutBar" Grid.Row="1" Background="#FF161616" Padding="10,5" MinHeight="34"
+                    BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel x:Name="ReadoutRows" Spacing="3" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ReadoutHint" VerticalAlignment="Center" Opacity="0.55" FontSize="13"
+                               Text="Hover to read pixels.  Ctrl+drag: sample a box.  Ctrl+click: pin a pixel.  Esc: clear." />
+                    <Button x:Name="ClearSampleButton" Grid.Column="1" Style="{StaticResource IconButtonStyle}" Visibility="Collapsed"
+                            Click="OnClearSample" ToolTipService.ToolTip="Clear pixel sample (Esc)">
+                        <FontIcon Glyph="&#xE894;" FontSize="16" />
+                    </Button>
+                </Grid>
+            </Border>
             </Grid>
 
             <Border x:Name="SidePane" Grid.Column="1" Width="372" BorderThickness="1,0,0,0"
@@ -270,17 +296,13 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <SelectorBar x:Name="PaneBar" SelectionChanged="OnPaneChanged" Margin="8,4">
-                        <SelectorBarItem Text="Layers" Tag="layers" IsSelected="True">
-                            <SelectorBarItem.Icon><SymbolIcon Symbol="Pictures" /></SelectorBarItem.Icon>
-                        </SelectorBarItem>
-                        <SelectorBarItem Text="Info" Tag="info">
-                            <SelectorBarItem.Icon><FontIcon Glyph="&#xE946;" /></SelectorBarItem.Icon>
-                        </SelectorBarItem>
-                        <SelectorBarItem Text="Scopes" Tag="scopes">
-                            <SelectorBarItem.Icon><FontIcon Glyph="&#xE9D2;" /></SelectorBarItem.Icon>
-                        </SelectorBarItem>
-                    </SelectorBar>
+                    <StackPanel x:Name="PaneTabs" Orientation="Horizontal" Spacing="4" Margin="8,6">
+                        <ToggleButton Content="Layers" Tag="layers" IsChecked="True" Style="{StaticResource TabToggleStyle}" Click="OnPaneTab" />
+                        <ToggleButton Content="Pixel" Tag="pixel" Style="{StaticResource TabToggleStyle}" Click="OnPaneTab"
+                                      ToolTipService.ToolTip="Pixel Analyzer" />
+                        <ToggleButton Content="Info" Tag="info" Style="{StaticResource TabToggleStyle}" Click="OnPaneTab" />
+                        <ToggleButton Content="Scopes" Tag="scopes" Style="{StaticResource TabToggleStyle}" Click="OnPaneTab" />
+                    </StackPanel>
 
                     <!-- Layers -->
                     <ScrollViewer x:Name="LayersPage" Grid.Row="1" Padding="12,4,12,12">
@@ -291,11 +313,11 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <ToggleSwitch x:Name="LockAovSwitch" Header="Lock AOV (A and B switch together)" IsOn="True"
-                                              Toggled="OnLockAovToggled" />
-                                <Button Grid.Column="1" Click="OnSwap" VerticalAlignment="Bottom" ToolTipService.ToolTip="Swap A and B">
+                                <CheckBox x:Name="LockAovSwitch" Content="Lock AOV (A and B switch together)" IsChecked="True"
+                                          Click="OnLockAovToggled" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Click="OnSwap" VerticalAlignment="Center" ToolTipService.ToolTip="Swap A and B">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <SymbolIcon Symbol="Switch" />
+                                        <FontIcon Glyph="&#xE8AB;" FontSize="16" />
                                         <TextBlock Text="Swap" />
                                     </StackPanel>
                                 </Button>
@@ -304,15 +326,30 @@
                         </StackPanel>
                     </ScrollViewer>
 
+                    <!-- Pixel Analyzer -->
+                    <ScrollViewer x:Name="PixelPage" Grid.Row="1" Padding="12,4,12,12" Visibility="Collapsed">
+                        <StackPanel Spacing="12">
+                            <Grid>
+                                <TextBlock Text="Pixel Analyzer" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                                <Button HorizontalAlignment="Right" Click="OnClearSample" ToolTipService.ToolTip="Clear pixel sample (Esc)">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE894;" FontSize="14" />
+                                        <TextBlock Text="Clear sample" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.75" TextWrapping="Wrap"
+                                       Text="Hover reads the pixel under the pointer. Ctrl+drag draws a red box that stays sampled after you let go; Ctrl+click pins a single pixel. Values are scene-linear and unclamped (above 1.0 shows as is). The swatch is the displayed colour. Press Esc or Clear sample to remove the box." />
+                            <TextBlock x:Name="AnalyzerEmpty" Text="Load a sequence to sample it." Opacity="0.7" />
+                            <StackPanel x:Name="AnalyzerHost" Spacing="16" />
+                            <TextBlock x:Name="ProbeDetail" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"
+                                       Visibility="Collapsed" />
+                        </StackPanel>
+                    </ScrollViewer>
+
                     <!-- Info -->
                     <ScrollViewer x:Name="InfoPage" Grid.Row="1" Padding="12,4,12,12" Visibility="Collapsed">
                         <StackPanel Spacing="12">
-                            <TextBlock Text="Pixel probe" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock x:Name="ProbeDetail" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"
-                                       Text="Move the pointer over the image." />
-                            <TextBlock Text="Region (Ctrl+drag)" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock x:Name="RegionDetail" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"
-                                       Text="Ctrl+drag a box on the image to average it." />
                             <Grid>
                                 <TextBlock Text="Frame statistics" Style="{StaticResource BodyStrongTextBlockStyle}" />
                                 <Button HorizontalAlignment="Right" Content="Refresh" Click="OnRefreshStats" />
@@ -394,46 +431,46 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <ToggleButton x:Name="HudToggle" IsChecked="True" Click="OnHudToggle" ToolTipService.ToolTip="Image info (HUD)">
+                <ToggleButton x:Name="HudToggle" Style="{StaticResource IconToggleStyle}" IsChecked="True" Click="OnHudToggle" ToolTipService.ToolTip="Image info (HUD)">
                     <FontIcon Glyph="&#xE946;" FontSize="16" />
                 </ToggleButton>
-                <ToggleButton x:Name="OverlaysToggle" IsChecked="True" Click="OnOverlaysToggle" ToolTipService.ToolTip="Overlays (Q)">
-                    <SymbolIcon Symbol="View" />
+                <ToggleButton x:Name="OverlaysToggle" Style="{StaticResource IconToggleStyle}" IsChecked="True" Click="OnOverlaysToggle" ToolTipService.ToolTip="Overlays (Q)">
+                    <FontIcon Glyph="&#xE890;" FontSize="16" />
                 </ToggleButton>
-                <Button Click="OnFit" ToolTipService.ToolTip="Fit (F)">
+                <Button Click="OnFit" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Fit (F)">
                     <FontIcon Glyph="&#xE9A6;" FontSize="16" />
                 </Button>
-                <Button Click="OnFullScreen" ToolTipService.ToolTip="Full screen (F11)">
-                    <SymbolIcon Symbol="FullScreen" />
+                <Button Click="OnFullScreen" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Full screen (F11)">
+                    <FontIcon Glyph="&#xE740;" FontSize="16" />
                 </Button>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
                 <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Button Click="OnStepBackward" ToolTipService.ToolTip="Step backward (Left)">
+                    <Button Click="OnStepBackward" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Step backward (Left)">
                         <FontIcon Glyph="&#xE76B;" FontSize="16" />
                     </Button>
-                    <Button Click="OnStepForward" ToolTipService.ToolTip="Step forward (Right)">
+                    <Button Click="OnStepForward" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Step forward (Right)">
                         <FontIcon Glyph="&#xE76C;" FontSize="16" />
                     </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Button Click="OnPlayReverse" ToolTipService.ToolTip="Play backward (Ctrl+Space)">
+                    <Button Click="OnPlayReverse" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Play backward (Ctrl+Space)">
                         <FontIcon x:Name="ReverseIcon" Glyph="&#xE768;" FontSize="16" RenderTransformOrigin="0.5,0.5">
                             <FontIcon.RenderTransform>
                                 <ScaleTransform ScaleX="-1" />
                             </FontIcon.RenderTransform>
                         </FontIcon>
                     </Button>
-                    <Button Click="OnPlayPause" Style="{StaticResource AccentButtonStyle}" ToolTipService.ToolTip="Play / pause (Space)">
-                        <SymbolIcon x:Name="PlayIcon" Symbol="Play" />
+                    <Button Click="OnPlayPause" Style="{StaticResource IconAccentButtonStyle}" ToolTipService.ToolTip="Play / pause (Space)">
+                        <FontIcon x:Name="PlayIcon" Glyph="&#xE768;" FontSize="16" />
                     </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Button Click="OnGoToStart" ToolTipService.ToolTip="Go to start (Home)">
-                        <SymbolIcon Symbol="Previous" />
+                    <Button Click="OnGoToStart" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Go to start (Home)">
+                        <FontIcon Glyph="&#xE892;" FontSize="16" />
                     </Button>
-                    <Button Click="OnGoToEnd" ToolTipService.ToolTip="Go to end (End)">
-                        <SymbolIcon Symbol="Next" />
+                    <Button Click="OnGoToEnd" Style="{StaticResource IconButtonStyle}" ToolTipService.ToolTip="Go to end (End)">
+                        <FontIcon Glyph="&#xE893;" FontSize="16" />
                     </Button>
                 </StackPanel>
             </StackPanel>
@@ -441,8 +478,8 @@
                 <TextBlock x:Name="CacheText" VerticalAlignment="Center" Opacity="0.7" />
                 <TextBlock x:Name="MeasuredFpsText" VerticalAlignment="Center" MinWidth="70" />
                 <ComboBox x:Name="FpsCombo" Width="110" SelectionChanged="OnFpsChanged" ToolTipService.ToolTip="Playback frame rate" />
-                <ToggleButton x:Name="LoopToggle" IsChecked="True" Click="OnLoopToggle" ToolTipService.ToolTip="Loop on / off">
-                    <SymbolIcon Symbol="RepeatAll" />
+                <ToggleButton x:Name="LoopToggle" Style="{StaticResource IconToggleStyle}" IsChecked="True" Click="OnLoopToggle" ToolTipService.ToolTip="Loop on / off">
+                    <FontIcon Glyph="&#xE8EE;" FontSize="16" />
                 </ToggleButton>
             </StackPanel>
         </Grid>

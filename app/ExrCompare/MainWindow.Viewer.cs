@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json.Nodes;
 using ExrCompare.Native;
 using Microsoft.UI;
 using Microsoft.UI.Input;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -15,32 +17,37 @@ using Windows.System;
 
 namespace ExrCompare;
 
-/// <summary>Annotation stroke in layer A image pixels.</summary>
-public sealed class Stroke
-{
-    public List<double[]> Points { get; set; } = new();
-    public double[] Color { get; set; } = { 1.0, 0.25, 0.2 };
-    public double Width { get; set; } = 3;
-}
-
+/// <summary>
+/// Viewer overlays and pointer handling: wipe widget, data-window outlines, contact-sheet labels and
+/// the Pixel Analyzer (hover readout, pinned red sample box).
+/// </summary>
 public sealed partial class MainWindow
 {
     // Geometry from the engine, in device pixels.
-    private double[]? _rectA, _rectB, _dataA, _dataB;
-    private int[]? _imageA;
+    private double[]? _rectA, _rectB, _dataA, _dataB, _regionRect;
     private JsonArray? _tilesA, _tilesB;
     private bool _geometryDirty;
 
-    private enum Drag { None, Pan, WipeCenter, WipeRotate, WipeMix, Region, Pen, Click }
+    private enum Drag { None, Pan, WipeCenter, WipeRotate, WipeMix, Region, Click }
     private Drag _drag;
     private Point _dragStart, _dragLast;
     private Point? _lastPointer;
-    private Stroke? _currentStroke;
-    private readonly Dictionary<int, List<Stroke>> _annotations = new();
+
+    // Wipe state mirrored locally so dragging never waits on a status round trip.
+    private double _wipeX = 0.5, _wipeY = 0.5, _wipeAngle, _wipeMix;
 
     private const double HandleRadius = 110;  // rotate handle distance from the wipe centre (DIPs)
     private const double ArcRadius = 62;      // mix arc radius
     private const double ArcSpan = Math.PI / 2;
+
+    // Persistent overlay elements (moved, never recreated, while dragging).
+    private Canvas? _staticLayer, _wipeLayer;
+    private CompositeTransform? _wipeTransform;
+    private Ellipse? _wipeMixDot;
+    private TextBlock? _wipeLabelA, _wipeLabelB;
+    private Rectangle? _dragBox, _sampleBox;
+
+    private static readonly Brush SampleRed = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 40, 40));
 
     // ------------------------------------------------------------ geometry --
     private void RefreshGeometry() => ApplyGeometry(_core.Call(new { cmd = "geometry" }));
@@ -53,7 +60,7 @@ public sealed partial class MainWindow
         _rectB = J.Rect(g, "b");
         _dataA = J.Rect(g, "dataWindowA");
         _dataB = J.Rect(g, "dataWindowB");
-        _imageA = g["imageA"] is JsonArray ia ? new[] { ia[0]!.GetValue<int>(), ia[1]!.GetValue<int>() } : null;
+        _regionRect = J.Rect(g, "region");
         _tilesA = g["tilesA"] as JsonArray;
         _tilesB = g["tilesB"] as JsonArray;
         // The engine learns the viewport size on its next frame; re-check soon if it differs.
@@ -65,33 +72,125 @@ public sealed partial class MainWindow
     private Point ToDip(double x, double y) => new(x / Scale, y / Scale);
     private (double x, double y) ToPx(Point p) => (p.X * Scale, p.Y * Scale);
 
-    private (double x, double y) ImageAToDip(double ix, double iy)
-    {
-        if (_rectA is null || _imageA is null) return (double.NaN, double.NaN);
-        double x = _rectA[0] + ix / _imageA[0] * (_rectA[2] - _rectA[0]);
-        double y = _rectA[1] + iy / _imageA[1] * (_rectA[3] - _rectA[1]);
-        return (x / Scale, y / Scale);
-    }
-
-    private double[]? DipToImageA(Point p)
-    {
-        if (_rectA is null || _imageA is null) return null;
-        var (x, y) = ToPx(p);
-        return new[] { (x - _rectA[0]) / (_rectA[2] - _rectA[0]) * _imageA[0], (y - _rectA[1]) / (_rectA[3] - _rectA[1]) * _imageA[1] };
-    }
-
     // -------------------------------------------------------------- overlay --
-    private (Point c, double angle, double mix) WipeGeometry()
+    private bool WipeVisible =>
+        J.Bool(_status, "hasContent") && OverlaysToggle.IsChecked == true && J.Str(_status, "compare") == "wipe";
+
+    private Point WipeCentre => new(_wipeX * ViewerArea.ActualWidth, _wipeY * ViewerArea.ActualHeight);
+
+    /// <summary>Takes the wipe from the engine status unless the user is dragging it.</summary>
+    private void SyncWipeFromStatus()
     {
+        if (_drag is Drag.WipeCenter or Drag.WipeRotate or Drag.WipeMix) return;
         var w = _status["wipe"];
-        double vpW = ViewerArea.ActualWidth, vpH = ViewerArea.ActualHeight;
-        return (new Point(J.Num(w, "x", 0.5) * vpW, J.Num(w, "y", 0.5) * vpH), J.Num(w, "angle"), J.Num(w, "mix"));
+        double x = J.Num(w, "x", 0.5), y = J.Num(w, "y", 0.5), a = J.Num(w, "angle"), m = J.Num(w, "mix");
+        if (x == _wipeX && y == _wipeY && a == _wipeAngle && m == _wipeMix) return;
+        (_wipeX, _wipeY, _wipeAngle, _wipeMix) = (x, y, a, m);
+        UpdateWipeWidget();
+    }
+
+    private void EnsureOverlay()
+    {
+        if (_staticLayer is not null) return;
+        var white = new SolidColorBrush(Colors.White);
+        var shadow = new SolidColorBrush(Windows.UI.Color.FromArgb(160, 0, 0, 0));
+        var accent = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+        var caution = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
+
+        _staticLayer = new Canvas();
+        // Nuke-style wipe widget, drawn once at the origin for angle 0 and moved with a transform.
+        _wipeTransform = new CompositeTransform();
+        _wipeLayer = new Canvas { RenderTransform = _wipeTransform, Visibility = Visibility.Collapsed };
+        void Line(double x0, double y0, double x1, double y1, Brush b, double t) =>
+            _wipeLayer.Children.Add(new Line { X1 = x0, Y1 = y0, X2 = x1, Y2 = y1, Stroke = b, StrokeThickness = t });
+        Ellipse Dot(double cx, double cy, double r, Brush? fill)
+        {
+            var e = new Ellipse { Width = r * 2, Height = r * 2, Stroke = white, StrokeThickness = 1.5, Fill = fill };
+            Canvas.SetLeft(e, cx - r);
+            Canvas.SetTop(e, cy - r);
+            _wipeLayer.Children.Add(e);
+            return e;
+        }
+        const double L = 8000;
+        Line(0, -L, 0, L, shadow, 3);
+        Line(0, -L, 0, L, white, 1);
+        Line(0, 0, HandleRadius, 0, white, 1.5);
+        Dot(HandleRadius, 0, 6, accent);
+        var arc = new PathFigure { StartPoint = Polar(new Point(), ArcRadius, -ArcSpan / 2) };
+        arc.Segments.Add(new ArcSegment
+        {
+            Point = Polar(new Point(), ArcRadius, ArcSpan / 2), Size = new Size(ArcRadius, ArcRadius),
+            SweepDirection = SweepDirection.Clockwise, IsLargeArc = false,
+        });
+        var geo = new PathGeometry();
+        geo.Figures.Add(arc);
+        _wipeLayer.Children.Add(new Microsoft.UI.Xaml.Shapes.Path { Data = geo, Stroke = white, StrokeThickness = 1.5 });
+        _wipeMixDot = Dot(0, 0, 5, caution);
+        Dot(0, 0, 8, null);
+        Line(-14, 0, 14, 0, white, 1);
+        Line(0, -14, 0, 14, white, 1);
+        _wipeLabelA = new TextBlock { Text = "A", Foreground = accent, FontWeight = FontWeights.SemiBold, Visibility = Visibility.Collapsed };
+        _wipeLabelB = new TextBlock { Text = "B", Foreground = caution, FontWeight = FontWeights.SemiBold, Visibility = Visibility.Collapsed };
+
+        _dragBox = new Rectangle { Stroke = SampleRed, StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 3, 2 }, Visibility = Visibility.Collapsed };
+        _sampleBox = new Rectangle { Stroke = SampleRed, StrokeThickness = 1.5, Visibility = Visibility.Collapsed };
+
+        Overlay.Children.Add(_staticLayer);
+        Overlay.Children.Add(_sampleBox);
+        Overlay.Children.Add(_dragBox);
+        Overlay.Children.Add(_wipeLayer);
+        Overlay.Children.Add(_wipeLabelA);
+        Overlay.Children.Add(_wipeLabelB);
+    }
+
+    /// <summary>Moves the wipe widget. Only transform and position properties change: cheap per move.</summary>
+    private void UpdateWipeWidget()
+    {
+        EnsureOverlay();
+        var vis = WipeVisible ? Visibility.Visible : Visibility.Collapsed;
+        _wipeLayer!.Visibility = _wipeLabelA!.Visibility = _wipeLabelB!.Visibility = vis;
+        if (vis == Visibility.Collapsed) return;
+        var c = WipeCentre;
+        _wipeTransform!.TranslateX = c.X;
+        _wipeTransform.TranslateY = c.Y;
+        _wipeTransform.Rotation = _wipeAngle * 180 / Math.PI;
+        var m = Polar(new Point(), ArcRadius, -ArcSpan / 2 + _wipeMix * ArcSpan);
+        Canvas.SetLeft(_wipeMixDot!, m.X - 5);
+        Canvas.SetTop(_wipeMixDot!, m.Y - 5);
+        var la = Polar(c, 26, _wipeAngle + Math.PI);
+        var lb = Polar(c, 26, _wipeAngle);
+        Canvas.SetLeft(_wipeLabelA, la.X - 4);
+        Canvas.SetTop(_wipeLabelA, la.Y - 10);
+        Canvas.SetLeft(_wipeLabelB, lb.X - 4);
+        Canvas.SetTop(_wipeLabelB, lb.Y - 10);
+    }
+
+    private void UpdateSampleBox()
+    {
+        EnsureOverlay();
+        if (_regionRect is not { } r || OverlaysToggle.IsChecked != true || !J.Bool(_status, "hasContent"))
+        {
+            _sampleBox!.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var a = ToDip(r[0], r[1]);
+        var b = ToDip(r[2], r[3]);
+        // At least a few DIPs so a single pinned pixel stays visible when zoomed out.
+        double w = Math.Max(3, b.X - a.X), h = Math.Max(3, b.Y - a.Y);
+        _sampleBox!.Width = w;
+        _sampleBox.Height = h;
+        Canvas.SetLeft(_sampleBox, (a.X + b.X - w) / 2);
+        Canvas.SetTop(_sampleBox, (a.Y + b.Y - h) / 2);
+        _sampleBox.Visibility = Visibility.Visible;
     }
 
     private void DrawOverlay()
     {
         if (!_ready) return;
-        Overlay.Children.Clear();
+        EnsureOverlay();
+        _staticLayer!.Children.Clear();
+        UpdateWipeWidget();
+        UpdateSampleBox();
         if (!J.Bool(_status, "hasContent") || OverlaysToggle.IsChecked != true) return;
         var accent = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
         var caution = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
@@ -102,36 +201,6 @@ public sealed partial class MainWindow
         {
             AddRect(_dataA, accent, dashed: true);
             AddRect(_dataB, caution, dashed: true);
-        }
-
-        // Nuke-style wipe widget: line, centre crosshair, rotate handle, mix arc.
-        if (J.Str(_status, "compare") == "wipe" && _rectA is not null && _rectB is not null)
-        {
-            var (c, a, mix) = WipeGeometry();
-            var n = new Point(Math.Cos(a), Math.Sin(a));
-            var d = new Point(-n.Y, n.X);
-            double L = 8000;
-            AddLine(c.X - d.X * L, c.Y - d.Y * L, c.X + d.X * L, c.Y + d.Y * L, shadow, 3);
-            AddLine(c.X - d.X * L, c.Y - d.Y * L, c.X + d.X * L, c.Y + d.Y * L, white, 1);
-            var h = new Point(c.X + n.X * HandleRadius, c.Y + n.Y * HandleRadius);
-            AddLine(c.X, c.Y, h.X, h.Y, white, 1.5);
-            AddEllipse(h, 6, white, accent);
-            // Mix arc on B's side.
-            var arc = new PathFigure { StartPoint = Polar(c, ArcRadius, a - ArcSpan / 2) };
-            arc.Segments.Add(new ArcSegment
-            {
-                Point = Polar(c, ArcRadius, a + ArcSpan / 2), Size = new Size(ArcRadius, ArcRadius),
-                SweepDirection = SweepDirection.Clockwise, IsLargeArc = false,
-            });
-            var geo = new PathGeometry();
-            geo.Figures.Add(arc);
-            Overlay.Children.Add(new Microsoft.UI.Xaml.Shapes.Path { Data = geo, Stroke = white, StrokeThickness = 1.5 });
-            AddEllipse(Polar(c, ArcRadius, a - ArcSpan / 2 + mix * ArcSpan), 5, white, caution);
-            AddEllipse(c, 8, white, null);
-            AddLine(c.X - 14, c.Y, c.X + 14, c.Y, white, 1);
-            AddLine(c.X, c.Y - 14, c.X, c.Y + 14, white, 1);
-            AddLabel("A", Polar(c, 26, a + Math.PI), accent);
-            AddLabel("B", Polar(c, 26, a), caution);
         }
 
         // Contact sheet labels.
@@ -150,27 +219,9 @@ public sealed partial class MainWindow
                 };
                 Canvas.SetLeft(label, p.X + 4);
                 Canvas.SetTop(label, p.Y + 4);
-                Overlay.Children.Add(label);
+                _staticLayer.Children.Add(label);
                 AddRect(r, new SolidColorBrush(Windows.UI.Color.FromArgb(90, 255, 255, 255)), dashed: false);
             }
-        }
-
-        // Annotations of the current frame.
-        if (_annotations.TryGetValue(J.Int(_status, "frame"), out var strokes))
-            foreach (var s in strokes) AddStroke(s);
-        if (_currentStroke is not null) AddStroke(_currentStroke);
-
-        // Region sampler box while dragging.
-        if (_drag == Drag.Region)
-        {
-            var box = new Rectangle
-            {
-                Width = Math.Abs(_dragLast.X - _dragStart.X), Height = Math.Abs(_dragLast.Y - _dragStart.Y),
-                Stroke = white, StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 3, 2 },
-            };
-            Canvas.SetLeft(box, Math.Min(_dragStart.X, _dragLast.X));
-            Canvas.SetTop(box, Math.Min(_dragStart.Y, _dragLast.Y));
-            Overlay.Children.Add(box);
         }
     }
 
@@ -185,42 +236,7 @@ public sealed partial class MainWindow
         if (dashed) rect.StrokeDashArray = new DoubleCollection { 4, 3 };
         Canvas.SetLeft(rect, a.X);
         Canvas.SetTop(rect, a.Y);
-        Overlay.Children.Add(rect);
-    }
-
-    private void AddLine(double x0, double y0, double x1, double y1, Brush brush, double thickness) =>
-        Overlay.Children.Add(new Line { X1 = x0, Y1 = y0, X2 = x1, Y2 = y1, Stroke = brush, StrokeThickness = thickness });
-
-    private void AddEllipse(Point c, double r, Brush stroke, Brush? fill)
-    {
-        var e = new Ellipse { Width = r * 2, Height = r * 2, Stroke = stroke, StrokeThickness = 1.5, Fill = fill };
-        Canvas.SetLeft(e, c.X - r);
-        Canvas.SetTop(e, c.Y - r);
-        Overlay.Children.Add(e);
-    }
-
-    private void AddLabel(string text, Point p, Brush brush)
-    {
-        var t = new TextBlock { Text = text, Foreground = brush, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-        Canvas.SetLeft(t, p.X - 4);
-        Canvas.SetTop(t, p.Y - 10);
-        Overlay.Children.Add(t);
-    }
-
-    private void AddStroke(Stroke s)
-    {
-        var line = new Polyline
-        {
-            Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, (byte)(s.Color[0] * 255), (byte)(s.Color[1] * 255), (byte)(s.Color[2] * 255))),
-            StrokeThickness = s.Width, StrokeLineJoin = PenLineJoin.Round,
-            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-        };
-        foreach (var p in s.Points)
-        {
-            var (x, y) = ImageAToDip(p[0], p[1]);
-            if (!double.IsNaN(x)) line.Points.Add(new Point(x, y));
-        }
-        Overlay.Children.Add(line);
+        _staticLayer!.Children.Add(rect);
     }
 
     // -------------------------------------------------------------- pointer --
@@ -239,24 +255,18 @@ public sealed partial class MainWindow
         if (middle) _drag = Drag.Pan;
         else if (left && IsKeyDown(VirtualKey.Menu)) { IsolateAt(p); return; }
         else if (left && IsKeyDown(VirtualKey.Control)) _drag = Drag.Region;
-        else if (left && PenToggle.IsChecked == true && _rectA is not null)
-        {
-            _drag = Drag.Pen;
-            _currentStroke = new Stroke();
-            if (DipToImageA(p) is { } ip) _currentStroke.Points.Add(ip);
-        }
-        else if (left && J.Str(_status, "compare") == "wipe" && OverlaysToggle.IsChecked == true && HitWipe(p) is { } hit) _drag = hit;
+        else if (left && WipeVisible && HitWipe(p) is { } hit) _drag = hit;
         else if (left) _drag = Drag.Click;  // becomes a pan once it moves
         if (_drag != Drag.None) ViewerArea.CapturePointer(e.Pointer);
     }
 
     private Drag? HitWipe(Point p)
     {
-        var (c, a, mix) = WipeGeometry();
+        var c = WipeCentre;
         double Dist(Point q) => Math.Sqrt((p.X - q.X) * (p.X - q.X) + (p.Y - q.Y) * (p.Y - q.Y));
-        if (Dist(Polar(c, HandleRadius, a)) < 12) return Drag.WipeRotate;
-        if (Dist(Polar(c, ArcRadius, a - ArcSpan / 2 + mix * ArcSpan)) < 12) return Drag.WipeMix;
-        if (Dist(c) < 14) return Drag.WipeCenter;
+        if (Dist(Polar(c, HandleRadius, _wipeAngle)) < 14) return Drag.WipeRotate;
+        if (Dist(Polar(c, ArcRadius, _wipeAngle - ArcSpan / 2 + _wipeMix * ArcSpan)) < 14) return Drag.WipeMix;
+        if (Dist(c) < 16) return Drag.WipeCenter;
         return null;
     }
 
@@ -274,40 +284,40 @@ public sealed partial class MainWindow
                 ApplyGeometry(_core.Call(new { cmd = "view", action = "pan", dx = dx * Scale, dy = dy * Scale }));
                 break;
             case Drag.WipeCenter:
-                _core.Call(new { cmd = "wipe", x = p.X / ViewerArea.ActualWidth, y = p.Y / ViewerArea.ActualHeight });
-                _status = _core.Call(new { cmd = "status" });
-                DrawOverlay();
+                _wipeX = Math.Clamp(p.X / ViewerArea.ActualWidth, 0, 1);
+                _wipeY = Math.Clamp(p.Y / ViewerArea.ActualHeight, 0, 1);
+                _core.Call(new { cmd = "wipe", x = _wipeX, y = _wipeY });
+                UpdateWipeWidget();
                 break;
             case Drag.WipeRotate:
             {
-                var (c, _, _) = WipeGeometry();
-                _core.Call(new { cmd = "wipe", angle = Math.Atan2(p.Y - c.Y, p.X - c.X) });
-                _status = _core.Call(new { cmd = "status" });
-                DrawOverlay();
+                var c = WipeCentre;
+                _wipeAngle = Math.Atan2(p.Y - c.Y, p.X - c.X);
+                _core.Call(new { cmd = "wipe", angle = _wipeAngle });
+                UpdateWipeWidget();
                 break;
             }
             case Drag.WipeMix:
             {
-                var (c, a, _) = WipeGeometry();
-                double rel = Math.IEEERemainder(Math.Atan2(p.Y - c.Y, p.X - c.X) - a, 2 * Math.PI);
-                _core.Call(new { cmd = "wipe", mix = Math.Clamp((rel + ArcSpan / 2) / ArcSpan, 0, 1) });
-                _status = _core.Call(new { cmd = "status" });
-                DrawOverlay();
+                var c = WipeCentre;
+                double rel = Math.IEEERemainder(Math.Atan2(p.Y - c.Y, p.X - c.X) - _wipeAngle, 2 * Math.PI);
+                _wipeMix = Math.Clamp((rel + ArcSpan / 2) / ArcSpan, 0, 1);
+                _core.Call(new { cmd = "wipe", mix = _wipeMix });
+                UpdateWipeWidget();
                 break;
             }
             case Drag.Region:
-                DrawOverlay();
-                break;
-            case Drag.Pen:
-                if (_currentStroke is not null && DipToImageA(p) is { } ip)
-                {
-                    _currentStroke.Points.Add(ip);
-                    DrawOverlay();
-                }
+                EnsureOverlay();
+                _dragBox!.Width = Math.Abs(p.X - _dragStart.X);
+                _dragBox.Height = Math.Abs(p.Y - _dragStart.Y);
+                Canvas.SetLeft(_dragBox, Math.Min(_dragStart.X, p.X));
+                Canvas.SetTop(_dragBox, Math.Min(_dragStart.Y, p.Y));
+                _dragBox.Visibility = Visibility.Visible;
                 break;
         }
         _dragLast = p;
-        UpdateProbe(p);
+        // Hover readout only when not dragging a handle or panning (keeps those moves light).
+        if (_drag is Drag.None or Drag.Click or Drag.Region) UpdateProbe(p);
     }
 
     private void OnViewerPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -320,31 +330,32 @@ public sealed partial class MainWindow
                 break;
             case Drag.Region:
             {
+                _dragBox!.Visibility = Visibility.Collapsed;
                 var (x0, y0) = ToPx(_dragStart);
                 var (x1, y1) = ToPx(p);
-                ShowRegion(_core.Call(new { cmd = "region", x0, y0, x1, y1 }));
+                // A Ctrl+click (no real box) pins the single pixel under the pointer.
+                bool click = Math.Abs(p.X - _dragStart.X) < 3 && Math.Abs(p.Y - _dragStart.Y) < 3;
+                if (click) _core.Call(new { cmd = "sample_pixel", x = x0, y = y0 });
+                else _core.Call(new { cmd = "sample_region", x0, y0, x1, y1 });
+                RefreshGeometry();
+                RefreshAnalyzer();
+                ShowPane("pixel");
                 break;
             }
-            case Drag.Pen:
-                if (_currentStroke is { Points.Count: > 0 })
-                {
-                    int frame = J.Int(_status, "frame");
-                    if (!_annotations.TryGetValue(frame, out var list)) _annotations[frame] = list = new List<Stroke>();
-                    list.Add(_currentStroke);
-                }
-                _currentStroke = null;
+            case Drag.WipeCenter or Drag.WipeRotate or Drag.WipeMix:
+                _status = _core.Call(new { cmd = "status" });
                 break;
         }
         _drag = Drag.None;
         ViewerArea.ReleasePointerCapture(e.Pointer);
-        DrawOverlay();
+        UpdateProbe(p);
     }
 
     private void OnViewerPointerExited(object sender, PointerRoutedEventArgs e)
     {
         if (_drag != Drag.None) return;
         _lastPointer = null;
-        ProbeText.Text = "";
+        RefreshAnalyzer();  // readout falls back to the pinned sample (or clears)
     }
 
     private void OnViewerWheel(object sender, PointerRoutedEventArgs e)
@@ -357,7 +368,11 @@ public sealed partial class MainWindow
         e.Handled = true;
     }
 
-    private void OnViewerDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => ViewAction(new { cmd = "view", action = "fit" });
+    private void OnViewerDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (IsKeyDown(VirtualKey.Control)) return;  // Ctrl+click samples, it doesn't refit
+        ViewAction(new { cmd = "view", action = "fit" });
+    }
 
     private void ClickTile(Point p)
     {
@@ -408,56 +423,276 @@ public sealed partial class MainWindow
         }
     }
 
+    // -------------------------------------------------------- pixel analyzer --
+    private JsonObject? _analyzer;  // last "analyzer" reply with region stats
+
     private void UpdateProbe(Point p)
     {
-        if (!J.Bool(_status, "hasContent")) return;
+        if (!_ready || !J.Bool(_status, "hasContent")) return;
         var (x, y) = ToPx(p);
+        var hover = _core.Call(new { cmd = "analyzer", x, y, region = false });
+        ShowReadout(hover, hovering: true);
+        UpdateAnalyzerCurrent(hover);
+        if (PixelPage.Visibility == Visibility.Visible) UpdateCryptoDetail(x, y);
+    }
+
+    /// <summary>Re-reads the pinned sample (frame, AOV or layer changed) and refreshes the readouts.</summary>
+    private void RefreshAnalyzer()
+    {
+        if (!_ready) return;
+        if (!J.Bool(_status, "hasContent"))
+        {
+            _analyzer = null;
+            ShowReadout(null, hovering: false);
+            return;
+        }
+        JsonObject r;
+        if (_lastPointer is { } p)
+        {
+            var (x, y) = ToPx(p);
+            r = _core.Call(new { cmd = "analyzer", x, y });
+        }
+        else r = _core.Call(new { cmd = "analyzer" });
+        _analyzer = r;
+        ShowReadout(r, hovering: _lastPointer is not null);
+        UpdateAnalyzerTable(r);
+    }
+
+    private void OnClearSample(object sender, RoutedEventArgs e) => ClearSample();
+
+    private bool SampleActive => J.Bool(_analyzer, "regionActive");
+
+    private void ClearSample()
+    {
+        _core.Call(new { cmd = "clear_region" });
+        _regionRect = null;
+        UpdateSampleBox();
+        RefreshAnalyzer();
+    }
+
+    // Nuke-style readout bar: "x=3336 y=332 4x4   0.03076 0.03363 0.06787 1.00000 [swatch]".
+    private sealed class ReadoutRow
+    {
+        public StackPanel Root = null!;
+        public TextBlock Pos = null!, Size = null!;
+        public TextBlock[] Values = new TextBlock[4];
+        public Border Swatch = null!;
+    }
+
+    private readonly ReadoutRow[] _readout = new ReadoutRow[2];
+
+    private static readonly Windows.UI.Color[] ChannelColors =
+    {
+        Windows.UI.Color.FromArgb(255, 255, 98, 98),
+        Windows.UI.Color.FromArgb(255, 110, 225, 110),
+        Windows.UI.Color.FromArgb(255, 105, 160, 255),
+        Windows.UI.Color.FromArgb(255, 235, 235, 235),
+    };
+
+    private static readonly FontFamily Mono = new("Cascadia Mono, Consolas");
+
+    private void BuildReadout()
+    {
+        for (int s = 0; s < 2; s++)
+        {
+            var row = new ReadoutRow { Root = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, Visibility = Visibility.Collapsed } };
+            TextBlock T(double width, Windows.UI.Color? color = null, bool right = false) => new()
+            {
+                FontFamily = Mono, FontSize = 15, Width = width, VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = right ? TextAlignment.Right : TextAlignment.Left,
+                Foreground = new SolidColorBrush(color ?? Windows.UI.Color.FromArgb(255, 200, 200, 200)),
+            };
+            var badge = new Border
+            {
+                Width = 22, Height = 20, CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center,
+                Background = (Brush)Application.Current.Resources[s == 0 ? "AccentFillColorDefaultBrush" : "SystemFillColorCautionBrush"],
+                Child = new TextBlock
+                {
+                    Text = s == 0 ? "A" : "B", FontWeight = FontWeights.SemiBold, FontSize = 13, Foreground = new SolidColorBrush(Colors.Black),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+            row.Root.Children.Add(badge);
+            row.Pos = T(170);
+            row.Size = T(90);
+            row.Root.Children.Add(row.Pos);
+            row.Root.Children.Add(row.Size);
+            for (int c = 0; c < 4; c++)
+            {
+                row.Values[c] = T(92, ChannelColors[c], right: true);
+                row.Root.Children.Add(row.Values[c]);
+            }
+            row.Swatch = new Border
+            {
+                Width = 34, Height = 18, VerticalAlignment = VerticalAlignment.Center, BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 90, 90, 90)),
+            };
+            row.Root.Children.Add(row.Swatch);
+            _readout[s] = row;
+            ReadoutRows.Children.Add(row.Root);
+        }
+    }
+
+    private void ShowReadout(JsonObject? r, bool hovering)
+    {
+        if (_readout[0] is null) BuildReadout();
+        bool region = J.Bool(r, "regionActive");
+        ClearSampleButton.Visibility = region ? Visibility.Visible : Visibility.Collapsed;
+        for (int s = 0; s < 2; s++)
+        {
+            var row = _readout[s];
+            var l = r?[s == 0 ? "a" : "b"];
+            var px = hovering ? l?["pixel"] : null;
+            var reg = l?["region"];
+            if (px is not null)
+            {
+                row.Pos.Text = $"x={J.Int(px, "x")} y={J.Int(px, "y")}";
+                row.Size.Text = "";
+                SetValues(row, px["rgba"] as JsonArray, px["display"] as JsonArray);
+            }
+            else if (reg is not null)
+            {
+                row.Pos.Text = $"x={J.Int(reg, "x")} y={J.Int(reg, "y")}";
+                row.Size.Text = $"{J.Int(reg, "w")}x{J.Int(reg, "h")}";
+                SetValues(row, reg["mean"] as JsonArray, reg["display"] as JsonArray);
+            }
+            row.Root.Visibility = px is not null || reg is not null ? Visibility.Visible : Visibility.Collapsed;
+        }
+        ReadoutHint.Visibility = _readout.All(x => x.Root.Visibility == Visibility.Collapsed) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static void SetValues(ReadoutRow row, JsonArray? v, JsonArray? display)
+    {
+        for (int c = 0; c < 4; c++) row.Values[c].Text = Fmt(v?[c]);
+        row.Swatch.Background = SwatchBrush(display);
+    }
+
+    /// <summary>Scene-linear values, unclamped, five decimals like Nuke's viewer.</summary>
+    private static string Fmt(JsonNode? v)
+    {
+        if (v is not JsonValue jv) return "-";
+        if (jv.TryGetValue(out string? s)) return s ?? "-";
+        double d = jv.GetValue<double>();
+        return Math.Abs(d) >= 100000 ? d.ToString("0.###e+0", CultureInfo.InvariantCulture) : d.ToString("0.00000", CultureInfo.InvariantCulture);
+    }
+
+    private static Brush SwatchBrush(JsonArray? display)
+    {
+        if (display is null || display.Count < 3) return new SolidColorBrush(Colors.Transparent);
+        byte B(int i) => (byte)Math.Round(Math.Clamp(display[i]!.GetValue<double>(), 0, 1) * 255);
+        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, B(0), B(1), B(2)));
+    }
+
+    // Side-pane table: Current / Min / Max / Average / Median x R G B A.
+    private static readonly string[] AnalyzerRows = { "Current", "Min", "Max", "Average", "Median" };
+    private static readonly string[] AnalyzerKeys = { "", "min", "max", "mean", "median" };
+    private readonly TextBlock[][,] _analyzerCells = new TextBlock[2][,];
+    private readonly TextBlock[] _analyzerTitles = new TextBlock[2];
+    private readonly Border[][] _analyzerSwatches = new Border[2][];
+    private readonly StackPanel[] _analyzerBlocks = new StackPanel[2];
+
+    private void BuildAnalyzerTable()
+    {
+        for (int s = 0; s < 2; s++)
+        {
+            var block = new StackPanel { Spacing = 6 };
+            _analyzerTitles[s] = new TextBlock { FontFamily = Mono, FontSize = 13, TextWrapping = TextWrapping.Wrap };
+            block.Children.Add(_analyzerTitles[s]);
+            var grid = new Grid { ColumnSpacing = 6, RowSpacing = 4 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });
+            for (int c = 0; c < 4; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+            for (int r = 0; r <= AnalyzerRows.Length; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            string[] head = { "", "R", "G", "B", "A" };
+            for (int c = 1; c < 5; c++)
+            {
+                var h = new TextBlock { Text = head[c], FontFamily = Mono, FontSize = 13, TextAlignment = TextAlignment.Right, Foreground = new SolidColorBrush(ChannelColors[c - 1]) };
+                Grid.SetColumn(h, c);
+                grid.Children.Add(h);
+            }
+            var cells = new TextBlock[AnalyzerRows.Length, 4];
+            var swatches = new Border[AnalyzerRows.Length];
+            for (int r = 0; r < AnalyzerRows.Length; r++)
+            {
+                var label = new TextBlock { Text = AnalyzerRows[r], FontSize = 13, Opacity = 0.8 };
+                Grid.SetRow(label, r + 1);
+                grid.Children.Add(label);
+                for (int c = 0; c < 4; c++)
+                {
+                    var t = new TextBlock { Text = "-", FontFamily = Mono, FontSize = 13, TextAlignment = TextAlignment.Right, Foreground = new SolidColorBrush(ChannelColors[c]) };
+                    Grid.SetRow(t, r + 1);
+                    Grid.SetColumn(t, c + 1);
+                    grid.Children.Add(t);
+                    cells[r, c] = t;
+                }
+                var sw = new Border { Width = 22, Height = 14, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center,
+                                      BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 90, 90, 90)), Visibility = r is 0 or 3 ? Visibility.Visible : Visibility.Collapsed };
+                Grid.SetRow(sw, r + 1);
+                Grid.SetColumn(sw, 5);
+                grid.Children.Add(sw);
+                swatches[r] = sw;
+            }
+            block.Children.Add(grid);
+            _analyzerCells[s] = cells;
+            _analyzerSwatches[s] = swatches;
+            _analyzerBlocks[s] = block;
+            AnalyzerHost.Children.Add(block);
+        }
+    }
+
+    private void UpdateAnalyzerCurrent(JsonObject r)
+    {
+        if (_analyzerCells[0] is null) BuildAnalyzerTable();
+        for (int s = 0; s < 2; s++)
+        {
+            var px = r[s == 0 ? "a" : "b"]?["pixel"];
+            var rgba = px?["rgba"] as JsonArray;
+            for (int c = 0; c < 4; c++) _analyzerCells[s][0, c].Text = Fmt(rgba?[c]);
+            _analyzerSwatches[s][0].Background = SwatchBrush(px?["display"] as JsonArray);
+        }
+    }
+
+    private void UpdateAnalyzerTable(JsonObject r)
+    {
+        if (_analyzerCells[0] is null) BuildAnalyzerTable();
+        UpdateAnalyzerCurrent(r);
+        bool any = false;
+        for (int s = 0; s < 2; s++)
+        {
+            var l = r[s == 0 ? "a" : "b"];
+            _analyzerBlocks[s].Visibility = l is null ? Visibility.Collapsed : Visibility.Visible;
+            any |= l is not null;
+            var reg = l?["region"];
+            string name = s == 0 ? "A" : "B";
+            _analyzerTitles[s].Text = reg is null
+                ? $"{name}   no sample (Ctrl+drag a box)"
+                : $"{name}   x={J.Int(reg, "x")} y={J.Int(reg, "y")} {J.Int(reg, "w")}x{J.Int(reg, "h")}   {J.Int(reg, "count")} px" +
+                  (J.Int(reg, "nan") + J.Int(reg, "inf") > 0 ? $"   {J.Int(reg, "nan")} NaN  {J.Int(reg, "inf")} Inf" : "");
+            for (int row = 1; row < AnalyzerRows.Length; row++)
+            {
+                var v = reg?[AnalyzerKeys[row]] as JsonArray;
+                for (int c = 0; c < 4; c++) _analyzerCells[s][row, c].Text = Fmt(v?[c]);
+            }
+            _analyzerSwatches[s][3].Background = SwatchBrush(reg?["display"] as JsonArray);
+        }
+        AnalyzerEmpty.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>Cryptomatte / ID names under the pointer, shown below the analyzer table.</summary>
+    private void UpdateCryptoDetail(double x, double y)
+    {
         var probe = _core.Call(new { cmd = "probe", x, y });
-        var parts = new List<string>();
         var detail = new List<string>();
         foreach (var (key, name) in new[] { ("a", "A"), ("b", "B") })
         {
-            var v = probe[key];
-            if (v is null) continue;
-            var c = v["rgba"] as JsonArray;
-            string values = c is null ? "" : $"R {J.Value(c[0])}  G {J.Value(c[1])}  B {J.Value(c[2])}  A {J.Value(c[3])}";
-            parts.Add($"{name} {J.Int(v, "x"),5},{J.Int(v, "y"),-5} {values}");
-            detail.Add($"{name}  x {J.Int(v, "x")}  y {J.Int(v, "y")}\n   {values}");
-            if (v["crypto"] is JsonArray ranks)
-                foreach (var r in ranks.Where(r => J.Num(r, "coverage") > 0))
-                {
-                    string n = J.Str(r, "name");
-                    detail.Add($"   {(n.Length > 0 ? n : "id " + J.Str(r, "id"))}  coverage {J.Num(r, "coverage"):0.000}");
-                    if (parts.Count > 0) parts[^1] += $"  {(n.Length > 0 ? n : J.Str(r, "id"))}";
-                }
+            if (probe[key]?["crypto"] is not JsonArray ranks) continue;
+            foreach (var r in ranks.Where(r => J.Num(r, "coverage") > 0))
+            {
+                string n = J.Str(r, "name");
+                detail.Add($"{name}  {(n.Length > 0 ? n : "id " + J.Str(r, "id"))}  coverage {J.Num(r, "coverage"):0.000}");
+            }
         }
-        ProbeText.Text = string.Join("    ", parts);
-        if (InfoPage.Visibility == Visibility.Visible) ProbeDetail.Text = detail.Count > 0 ? string.Join("\n", detail) : "Outside the image.";
-    }
-
-    private void ShowRegion(JsonObject r)
-    {
-        var lines = new List<string>();
-        foreach (var (key, name) in new[] { ("a", "A"), ("b", "B") })
-        {
-            var v = r[key];
-            if (v is null) continue;
-            string Arr(string k) => string.Join("  ", ((v[k] as JsonArray) ?? new JsonArray()).Select(x => J.Value(x)));
-            lines.Add($"{name}  {J.Int(v, "count")} px{(J.Int(v, "nan") + J.Int(v, "inf") > 0 ? $"  ({J.Int(v, "nan")} NaN, {J.Int(v, "inf")} Inf)" : "")}");
-            lines.Add($"   mean {Arr("mean")}");
-            lines.Add($"   min  {Arr("min")}");
-            lines.Add($"   max  {Arr("max")}");
-        }
-        RegionDetail.Text = lines.Count > 0 ? string.Join("\n", lines) : "No image under the box.";
-        PaneBar.SelectedItem = PaneBar.Items[1];
-    }
-
-    private void OnPenToggle(object sender, RoutedEventArgs e) => PenMenuItem.IsChecked = PenToggle.IsChecked == true;
-    private void OnPenMenu(object sender, RoutedEventArgs e) => PenToggle.IsChecked = PenMenuItem.IsChecked;
-
-    private void OnClearAnnotations(object sender, RoutedEventArgs e)
-    {
-        _annotations.Remove(J.Int(_status, "frame"));
-        DrawOverlay();
+        ProbeDetail.Text = string.Join("\n", detail);
+        ProbeDetail.Visibility = detail.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 }

@@ -201,6 +201,10 @@ struct Session::Impl {
     ViewState view;
     int vpW = 1, vpH = 1;
     float wipeX = 0.5f, wipeY = 0.5f, wipeAngle = 0.0f, wipeMix = 0.0f, wipeSoft = 0.0f;
+    // Pixel Analyzer sample region, normalised to the image (0..1) so it follows pan/zoom and
+    // samples the same image area in A and B.
+    bool regionActive = false;
+    double regU0 = 0, regV0 = 0, regU1 = 0, regV1 = 0;
     float diffGain = 1.0f;
     float exposureStops = 0.0f, gamma = 1.0f;
     int channel = 0;
@@ -707,6 +711,14 @@ struct Session::Impl {
             j[s == 0 ? "dataWindowA" : "dataWindowB"] = {x0, y0, x1, y1};
             j[s == 0 ? "imageA" : "imageB"] = {sl.info.width, sl.info.height};
         }
+        // Pinned Pixel Analyzer region, drawn on the first visible layer.
+        if (regionActive) {
+            const PixelRect* rr = L.showA ? &L.a : (L.showB ? &L.b : nullptr);
+            if (rr) {
+                const double w = rr->x1 - rr->x0, h = rr->y1 - rr->y0;
+                j["region"] = {rr->x0 + regU0 * w, rr->y0 + regV0 * h, rr->x0 + regU1 * w, rr->y0 + regV1 * h};
+            }
+        }
         // Contact sheet tiles (for labels and click-to-select).
         for (int s = 0; s < 2; ++s) {
             const Slot& sl = slots[s];
@@ -800,6 +812,85 @@ struct Session::Impl {
         return out;
     }
 
+    // Viewport pixel -> normalised image position of whichever layer is under it (A first).
+    std::optional<std::pair<double, double>> viewportToNormalised(const Layout& L, double px, double py) const {
+        for (int s = 0; s < 2; ++s) {
+            const bool show = s == 0 ? L.showA : L.showB;
+            if (!show || !slots[s].loaded) continue;
+            const PixelRect& rr = s == 0 ? L.a : L.b;
+            const double u = (px - rr.x0) / (rr.x1 - rr.x0), v = (py - rr.y0) / (rr.y1 - rr.y0);
+            if (u >= 0 && v >= 0 && u < 1 && v < 1) return std::make_pair(u, v);
+        }
+        return std::nullopt;
+    }
+
+    // Converts linear values of a slot to what the viewer shows (exposure + OCIO), for swatches.
+    json displaySwatch(int s, const float rgba[4]) {
+        float px[4] = {rgba[0], rgba[1], rgba[2], 1.0f};
+        const float gain = std::exp2(exposureStops);
+        for (int c = 0; c < 3; ++c) px[c] = std::isfinite(px[c]) ? px[c] * gain : 0.0f;
+        if (slots[s].mode() == LayerMode::Color) {
+            try {
+                ocio.toDisplayCpu(slots[s].inputSpace, px, 1, 1);
+            } catch (...) {
+            }
+        }
+        return {std::clamp(px[0], 0.0f, 1.0f), std::clamp(px[1], 0.0f, 1.0f), std::clamp(px[2], 0.0f, 1.0f)};
+    }
+
+    // Pixel Analyzer: current pixel (optional x,y in viewport pixels) and the pinned region.
+    json analyzerJson(std::optional<std::pair<double, double>> at, bool withRegion = true) {
+        const Layout L = layout(vpW, vpH, view);
+        json out = json::object();
+        out["regionActive"] = regionActive;
+        auto num = [](double x) { return std::isfinite(x) ? json(x) : json(std::isnan(x) ? "NaN" : (x > 0 ? "+Inf" : "-Inf")); };
+        for (int s = 0; s < 2; ++s) {
+            const bool show = s == 0 ? L.showA : L.showB;
+            const Slot& sl = slots[s];
+            if (!show || !sl.loaded) continue;
+            const PixelRect& rr = s == 0 ? L.a : L.b;
+            const int lf = layerFrame(s, ctrl.current());
+            FramePtr f = inRange(s, lf) ? lookup(s, lf) : nullptr;
+            if (!f || f->missing) continue;
+            json lj;
+            if (at) {
+                auto p = rectToImage(rr, at->first, at->second, f->fullWidth, f->fullHeight);
+                if (p) {
+                    const int sx = p->first * f->width / std::max(1, f->fullWidth);
+                    const int sy = p->second * f->height / std::max(1, f->fullHeight);
+                    float c[4];
+                    for (int k = 0; k < 4; ++k) c[k] = f->sample(sx, sy, k);
+                    lj["pixel"] = {{"x", p->first}, {"y", p->second}, {"rgba", {num(c[0]), num(c[1]), num(c[2]), num(c[3])}},
+                                   {"display", displaySwatch(s, c)}};
+                }
+            }
+            if (regionActive && withRegion) {
+                const int x0 = int(std::floor(regU0 * f->width)), y0 = int(std::floor(regV0 * f->height));
+                const int x1 = std::max(x0, int(std::ceil(regU1 * f->width)) - 1);
+                const int y1 = std::max(y0, int(std::ceil(regV1 * f->height)) - 1);
+                const RegionStats st = regionStats(*f, x0, y0, x1, y1);
+                const float mean[4] = {float(st.mean[0]), float(st.mean[1]), float(st.mean[2]), float(st.mean[3])};
+                json arr[4];
+                for (int k = 0; k < 4; ++k) arr[k] = json::array();
+                for (int k = 0; k < 4; ++k) {
+                    arr[0].push_back(num(st.min[k]));
+                    arr[1].push_back(num(st.max[k]));
+                    arr[2].push_back(num(st.mean[k]));
+                    arr[3].push_back(num(st.median[k]));
+                }
+                lj["region"] = {{"x", int(std::floor(regU0 * f->fullWidth))},
+                                {"y", int(std::floor(regV0 * f->fullHeight))},
+                                {"w", std::max(1, int(std::lround((regU1 - regU0) * f->fullWidth)))},
+                                {"h", std::max(1, int(std::lround((regV1 - regV0) * f->fullHeight)))},
+                                {"count", st.count}, {"nan", st.nan}, {"inf", st.inf},
+                                {"min", arr[0]}, {"max", arr[1]}, {"mean", arr[2]}, {"median", arr[3]},
+                                {"display", displaySwatch(s, mean)}};
+            }
+            out[s == 0 ? "a" : "b"] = lj;
+        }
+        return out;
+    }
+
     json statsJson() {
         json out = json::object();
         for (int s = 0; s < 2; ++s) {
@@ -876,6 +967,42 @@ struct Session::Impl {
         if (cmd == "probe") return probeJson(j.value("x", 0.0), j.value("y", 0.0));
         if (cmd == "region") return regionJson(j.value("x0", 0.0), j.value("y0", 0.0), j.value("x1", 0.0), j.value("y1", 0.0));
         if (cmd == "stats") return statsJson();
+        if (cmd == "analyzer") {
+            std::optional<std::pair<double, double>> at;
+            if (j.contains("x") && j.contains("y")) at = std::make_pair(j["x"].get<double>(), j["y"].get<double>());
+            return analyzerJson(at, j.value("region", true));
+        }
+        if (cmd == "sample_region" || cmd == "sample_pixel") {
+            const Layout L = layout(vpW, vpH, view);
+            auto a = viewportToNormalised(L, j.value("x0", j.value("x", 0.0)), j.value("y0", j.value("y", 0.0)));
+            if (cmd == "sample_pixel") {
+                // Snap to the pixel under the pointer of the layer that was clicked.
+                if (!a) return {{"regionActive", regionActive}};
+                const Slot& ref = slots[0].loaded && L.showA ? slots[0] : slots[1];
+                const double w = std::max(1, ref.info.width), h = std::max(1, ref.info.height);
+                regU0 = std::floor(a->first * w) / w;
+                regV0 = std::floor(a->second * h) / h;
+                regU1 = regU0 + 1.0 / w;
+                regV1 = regV0 + 1.0 / h;
+                regionActive = true;
+            } else {
+                const PixelRect& rr = L.showA ? L.a : L.b;
+                auto clampU = [&](double px) { return std::clamp((px - rr.x0) / (rr.x1 - rr.x0), 0.0, 1.0); };
+                auto clampV = [&](double py) { return std::clamp((py - rr.y0) / (rr.y1 - rr.y0), 0.0, 1.0); };
+                const double u0 = clampU(j.value("x0", 0.0)), u1 = clampU(j.value("x1", 0.0));
+                const double v0 = clampV(j.value("y0", 0.0)), v1 = clampV(j.value("y1", 0.0));
+                regU0 = std::min(u0, u1);
+                regU1 = std::max(u0, u1);
+                regV0 = std::min(v0, v1);
+                regV1 = std::max(v0, v1);
+                regionActive = regU1 > regU0 && regV1 > regV0;
+            }
+            return analyzerJson(std::nullopt);
+        }
+        if (cmd == "clear_region") {
+            regionActive = false;
+            return {{"regionActive", false}};
+        }
         if (cmd == "histogram") return {{"histogram", histogramJson(slotArg(), j.value("bins", 256))}};
         if (cmd == "metadata") {
             const int s = slotArg();
@@ -1076,6 +1203,7 @@ struct Session::Impl {
                 wipeX = wipeY = 0.5f;
                 wipeAngle = wipeMix = wipeSoft = 0.0f;
             }
+            return json::object();  // sent on every pointer move while dragging: keep it cheap
         }
         // ---------------- colour
         else if (cmd == "color") {

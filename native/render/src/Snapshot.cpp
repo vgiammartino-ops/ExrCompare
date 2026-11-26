@@ -25,7 +25,7 @@ void check(HRESULT hr, const char* what) {
 }  // namespace
 
 void drawOverlay(ID3D11Texture2D* texture, const Overlay& overlay) {
-    if (overlay.burnIn.empty() && overlay.strokes.empty()) return;
+    if (overlay.burnIn.empty()) return;
     D3D11_TEXTURE2D_DESC td{};
     texture->GetDesc(&td);
 
@@ -39,22 +39,6 @@ void drawOverlay(ID3D11Texture2D* texture, const Overlay& overlay) {
     check(d2d->CreateDxgiSurfaceRenderTarget(surface.Get(), &props, &rt), "CreateDxgiSurfaceRenderTarget");
 
     rt->BeginDraw();
-    // Annotations.
-    D2D1_STROKE_STYLE_PROPERTIES sp = D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
-                                                                  D2D1_CAP_STYLE_ROUND, D2D1_LINE_JOIN_ROUND);
-    ComPtr<ID2D1StrokeStyle> round;
-    d2d->CreateStrokeStyle(sp, nullptr, 0, &round);
-    for (const Stroke& s : overlay.strokes) {
-        ComPtr<ID2D1SolidColorBrush> brush;
-        rt->CreateSolidColorBrush(D2D1::ColorF(s.r, s.g, s.b, 1.0f), &brush);
-        for (size_t i = 1; i < s.points.size(); ++i)
-            rt->DrawLine(D2D1::Point2F(s.points[i - 1].first, s.points[i - 1].second),
-                         D2D1::Point2F(s.points[i].first, s.points[i].second), brush.Get(), s.width, round.Get());
-        if (s.points.size() == 1)
-            rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(s.points[0].first, s.points[0].second), s.width / 2, s.width / 2),
-                            brush.Get());
-    }
-
     // Burn-in text, bottom-left, on a translucent band.
     if (!overlay.burnIn.empty()) {
         ComPtr<IDWriteFactory> dw;

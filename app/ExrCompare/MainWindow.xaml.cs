@@ -50,6 +50,7 @@ public sealed partial class MainWindow : Window
             panel.OpenRequested = slot => _ = PickAndOpen(slot, folder: false);
             panel.VersionRequested = (slot, delta) => ChangeVersion(slot, delta);
             panel.CloseRequested = CloseLayer;
+            panel.Updated = OnLayerPanelUpdated;
         }
         TimelineSlider.AddHandler(UIElement.PointerPressedEvent,
             new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => _scrubbing = true), true);
@@ -58,9 +59,6 @@ public sealed partial class MainWindow : Window
         TimelineSlider.AddHandler(UIElement.PointerCaptureLostEvent,
             new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => _scrubbing = false), true);
 
-        _updating = true;
-        CompareBar.SelectedItem = CompareBar.Items[0];
-        _updating = false;
         UpdateFpsCombo(24, 1);
         RefreshOcio();
         RefreshLayerPanels();
@@ -98,6 +96,7 @@ public sealed partial class MainWindow : Window
         RefreshGeometry();
         ApplyStatus();
         RefreshSidePanels(force: true);
+        RefreshAnalyzer();
     }
 
     private static long RamPercent(int percent)
@@ -183,14 +182,15 @@ public sealed partial class MainWindow : Window
         LoopToggle.IsChecked = J.Bool(_status, "loop", true);
         LoopMenuItem.IsChecked = LoopToggle.IsChecked == true;
         string compare = J.Str(_status, "compare", "a");
-        var item = CompareBar.Items.FirstOrDefault(i => (string)i.Tag == compare);
-        if (item is not null && CompareBar.SelectedItem != item) CompareBar.SelectedItem = item;
+        int ci = CompareCombo.Items.Cast<ComboBoxItem>().ToList().FindIndex(i => (string)i.Tag == compare);
+        if (ci >= 0 && CompareCombo.SelectedIndex != ci) CompareCombo.SelectedIndex = ci;
         DiffGainBox.Visibility = compare == "difference" ? Visibility.Visible : Visibility.Collapsed;
         WipeSoftBox.Visibility = compare == "wipe" ? Visibility.Visible : Visibility.Collapsed;
         _updating = false;
+        SyncWipeFromStatus();
 
         CurrentFrameText.Text = frame.ToString();
-        PlayIcon.Symbol = playing && dir > 0 ? Symbol.Pause : Symbol.Play;
+        PlayIcon.Glyph = playing && dir > 0 ? "\uE769" : "\uE768";
         ReverseIcon.Glyph = playing && dir < 0 ? "" : "";
         MeasuredFpsText.Text = playing ? $"{J.Num(_status, "measuredFps"):0.00} fps" : "";
         CacheText.Text = $"Cache {J.Num(_status, "cacheBytes") / 1073741824.0:0.0} / {J.Num(_status, "cacheBudget") / 1073741824.0:0.0} GB";
@@ -249,7 +249,7 @@ public sealed partial class MainWindow : Window
         DrawOverlay();
         LoadNote();
         if (!playing || _tick % 8 == 0) RefreshSidePanels(force: false);
-        if (_lastPointer is { } p && !playing) UpdateProbe(p);
+        if (!playing || _tick % 8 == 0) RefreshAnalyzer();
     }
 
     // ------------------------------------------------------------- cache bars --
@@ -372,11 +372,54 @@ public sealed partial class MainWindow : Window
     private void OnProxyMenu(object sender, RoutedEventArgs e) => SetProxy(ProxyMenuItem.IsChecked);
 
     // ---------------------------------------------------------------- compare --
-    private void OnCompareBarChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
+    private void OnCompareComboChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_ready) return;
-        if (_updating || sender.SelectedItem is null) return;
-        Send(new { cmd = "compare", mode = (string)sender.SelectedItem.Tag });
+        if (_updating || CompareCombo.SelectedItem is not ComboBoxItem item) return;
+        Send(new { cmd = "compare", mode = (string)item.Tag });
+        AfterChange();
+    }
+
+    // ------------------------------------------------------- toolbar AOV menu --
+    private List<string> _toolbarAovs = new();
+
+    /// <summary>Mirrors layer A's AOV list and selection into the toolbar menu.</summary>
+    private void OnLayerPanelUpdated(int slot, JsonObject layer)
+    {
+        if (slot != 0) return;
+        bool prev = _updating;
+        _updating = true;
+        try
+        {
+            var aovs = (layer["aovs"] as JsonArray) ?? new JsonArray();
+            var names = J.Bool(layer, "loaded") ? aovs.Select(a => J.Str(a, "name")).ToList() : new List<string>();
+            if (!names.SequenceEqual(_toolbarAovs))
+            {
+                _toolbarAovs = names;
+                ToolbarAovCombo.Items.Clear();
+                foreach (var a in aovs)
+                {
+                    string name = J.Str(a, "name"), kind = J.Str(a, "kind");
+                    var item = new ComboBoxItem { Content = kind == "color" ? name : $"{name}   ({kind})", Tag = name };
+                    ToolTipService.SetToolTip(item, J.Str(a, "channels"));
+                    ToolbarAovCombo.Items.Add(item);
+                }
+            }
+            ToolbarAovCombo.IsEnabled = names.Count > 0;
+            int index = J.Int(layer, "aov");
+            ToolbarAovCombo.SelectedIndex = index >= 0 && index < names.Count ? index : -1;
+        }
+        finally
+        {
+            _updating = prev;
+        }
+    }
+
+    private void OnToolbarAovChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || _updating || ToolbarAovCombo.SelectedIndex < 0) return;
+        LayerPanelA.Update(Send(new { cmd = "aov", slot = 0, index = ToolbarAovCombo.SelectedIndex }));
+        if (J.Bool(_status, "lockAov", true)) LayerPanelB.Update(_core.Call(new { cmd = "layer", slot = 1 }));
         AfterChange();
     }
 
@@ -416,7 +459,7 @@ public sealed partial class MainWindow : Window
 
     private void SetLockAov(bool on)
     {
-        LockAovSwitch.IsOn = on;
+        LockAovSwitch.IsChecked = on;
         LockAovMenuItem.IsChecked = on;
         Send(new { cmd = "lock_aov", on });
         RefreshLayerPanels();
@@ -425,7 +468,7 @@ public sealed partial class MainWindow : Window
     private void OnLockAovToggled(object sender, RoutedEventArgs e)
     {
         if (!_ready) return;
-        if (!_updating) SetLockAov(LockAovSwitch.IsOn);
+        if (!_updating) SetLockAov(LockAovSwitch.IsChecked == true);
     }
 
     private void OnLockAovMenu(object sender, RoutedEventArgs e) => SetLockAov(LockAovMenuItem.IsChecked);
@@ -551,6 +594,8 @@ public sealed partial class MainWindow : Window
 
     private void OnViewChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Full view name on hover too, e.g. "ACES 2.0 - SDR 100 nits (Rec.709)".
+        ToolTipService.SetToolTip(ViewCombo, ViewCombo.SelectedItem as string ?? "OCIO view");
         if (!_ready) return;
         if (!_updating && ViewCombo.SelectedItem is string view) Send(new { cmd = "color", view });
     }
@@ -569,7 +614,7 @@ public sealed partial class MainWindow : Window
         LayerPanelA.Update(_core.Call(new { cmd = "layer", slot = 0 }), spaces);
         LayerPanelB.Update(_core.Call(new { cmd = "layer", slot = 1 }), spaces);
         _updating = true;
-        LockAovSwitch.IsOn = J.Bool(_status, "lockAov", true);
+        LockAovSwitch.IsChecked = J.Bool(_status, "lockAov", true);
         _updating = false;
     }
 
@@ -641,13 +686,18 @@ public sealed partial class MainWindow : Window
     private void OnSidePaneMenu(object sender, RoutedEventArgs e) =>
         SidePane.Visibility = SidePaneMenuItem.IsChecked ? Visibility.Visible : Visibility.Collapsed;
 
-    private void OnPaneChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
+    private void OnPaneTab(object sender, RoutedEventArgs e) => ShowPane((string)((FrameworkElement)sender).Tag);
+    private void OnShowPixelPane(object sender, RoutedEventArgs e) => ShowPane("pixel");
+
+    /// <summary>Side pane tabs are plain toggle buttons: instant, fixed size, no sliding indicator.</summary>
+    private void ShowPane(string tag)
     {
-        if (!_ready) return;
-        string tag = sender.SelectedItem?.Tag as string ?? "layers";
+        foreach (var t in PaneTabs.Children.OfType<ToggleButton>()) t.IsChecked = (string)t.Tag == tag;
         LayersPage.Visibility = tag == "layers" ? Visibility.Visible : Visibility.Collapsed;
+        PixelPage.Visibility = tag == "pixel" ? Visibility.Visible : Visibility.Collapsed;
         InfoPage.Visibility = tag == "info" ? Visibility.Visible : Visibility.Collapsed;
         ScopesPage.Visibility = tag == "scopes" ? Visibility.Visible : Visibility.Collapsed;
+        if (tag == "pixel") RefreshAnalyzer();
         RefreshSidePanels(force: true);
     }
 
