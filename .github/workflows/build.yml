@@ -32,7 +32,8 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: vcpkg-cache
           key: vcpkg-${{ env.TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('native/vcpkg.json') }}
@@ -54,6 +55,13 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
             "-DVCPKG_TARGET_TRIPLET=$env:TRIPLET" 2>&1 | Tee-Object -FilePath logs/1-native-configure.log
           if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Save vcpkg binary cache (even if later steps fail)
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ env.TRIPLET }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('native/vcpkg.json') }}
 
       - name: Build native
         run: |
