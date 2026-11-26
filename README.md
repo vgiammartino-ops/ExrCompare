@@ -51,6 +51,7 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
   - A fixed two-row readout bar under the viewer (one row per input, like Nuke): resolution, bbox, channels, `x= y= WxH`, R G B A, swatch, H S V and L.
 - Per-channel frame statistics.
 - **Histogram and waveform** scopes.
+- **Side pane** (layers, Pixel Analyzer, info, scopes) starts closed. Open or hide it with the pane button at the right end of the transport bar, View → Side pane, or Ctrl+I.
 - **Metadata panel:** every EXR header attribute. A data-window outline is drawn on the image.
 - **Stereo:** multi-view EXR view selector.
 

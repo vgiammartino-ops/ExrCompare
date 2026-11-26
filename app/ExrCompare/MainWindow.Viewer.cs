@@ -46,6 +46,21 @@ public sealed partial class MainWindow
     private Ellipse? _wipeMixDot;
     private TextBlock? _wipeLabelA, _wipeLabelB;
     private Rectangle? _dragBox, _sampleBox;
+    private Line? _wipeLine, _wipeShadowLine;
+
+    /// <summary>The wipe line spans the viewer from any centre and angle: diagonal plus a margin.</summary>
+    private void SizeWipeLine()
+    {
+        if (_wipeLine is null || _wipeShadowLine is null) return;
+        double w = ViewerArea.ActualWidth, h = ViewerArea.ActualHeight;
+        double l = Math.Sqrt(w * w + h * h) + 32;
+        foreach (var line in new[] { _wipeLine, _wipeShadowLine })
+        {
+            line.X1 = line.X2 = 0;
+            line.Y1 = -l;
+            line.Y2 = l;
+        }
+    }
 
     private static readonly Brush SampleRed = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 40, 40));
 
@@ -111,9 +126,12 @@ public sealed partial class MainWindow
             _wipeLayer.Children.Add(e);
             return e;
         }
-        const double L = 8000;
-        Line(0, -L, 0, L, shadow, 3);
-        Line(0, -L, 0, L, white, 1);
+        // Length set by SizeWipeLine (viewer diagonal); the overlay clip trims the rest.
+        _wipeShadowLine = new Line { Stroke = shadow, StrokeThickness = 3 };
+        _wipeLine = new Line { Stroke = white, StrokeThickness = 1 };
+        _wipeLayer.Children.Add(_wipeShadowLine);
+        _wipeLayer.Children.Add(_wipeLine);
+        SizeWipeLine();
         Line(0, 0, HandleRadius, 0, white, 1.5);
         Dot(HandleRadius, 0, 6, accent);
         var arc = new PathFigure { StartPoint = Polar(new Point(), ArcRadius, -ArcSpan / 2) };

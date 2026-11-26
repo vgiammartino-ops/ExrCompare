@@ -319,6 +319,7 @@ public sealed partial class MainWindow
                         "Alt+click          Isolate Cryptomatte / ID object\n" +
                         "Ctrl+O / Ctrl+Shift+O   Open into A / B\n" +
                         "Ctrl+E             Export snapshot\n" +
+                        "Ctrl+I             Show / hide side pane\n" +
                         "Ctrl+S             Save session\n" +
                         "F11 / Esc          Full screen / leave full screen",
                 },

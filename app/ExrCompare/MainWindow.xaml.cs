@@ -136,6 +136,10 @@ public sealed partial class MainWindow : Window
 
     private void OnViewerSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        // XAML doesn't clip a Canvas: without this the wipe line and outlines draw over the
+        // title bar, toolbar, readout and timeline.
+        Overlay.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
+        SizeWipeLine();
         if (!_ready) return;
         _core.Resize(PixelWidth(), PixelHeight(), Viewer.CompositionScaleX, Viewer.CompositionScaleY);
         // The engine learns the new size on its next frame; re-read geometry shortly after.
@@ -704,8 +708,19 @@ public sealed partial class MainWindow : Window
     private void OnOverlaysToggle(object sender, RoutedEventArgs e) => SetOverlays(OverlaysToggle.IsChecked == true);
     private void OnOverlaysMenu(object sender, RoutedEventArgs e) => SetOverlays(OverlaysMenuItem.IsChecked);
 
-    private void OnSidePaneMenu(object sender, RoutedEventArgs e) =>
-        SidePane.Visibility = SidePaneMenuItem.IsChecked ? Visibility.Visible : Visibility.Collapsed;
+    private void OnSidePaneMenu(object sender, RoutedEventArgs e) => SetSidePane(SidePaneMenuItem.IsChecked);
+    private void OnSidePaneToggle(object sender, RoutedEventArgs e) => SetSidePane(SidePaneToggle.IsChecked == true);
+
+    /// <summary>One path for the transport button, View menu and Ctrl+I, so all three stay in step.</summary>
+    private void SetSidePane(bool open)
+    {
+        SidePane.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        SidePaneMenuItem.IsChecked = open;
+        SidePaneToggle.IsChecked = open;
+        SidePaneIcon.Glyph = open ? "\uEA5C" : "\uEA5B";  // arrow shows what a click will do
+        ToolTipService.SetToolTip(SidePaneToggle, open ? "Hide side pane (Ctrl+I)" : "Show side pane (Ctrl+I)");
+        if (open) RefreshSidePanels(force: true);
+    }
 
     private void OnPaneTab(object sender, RoutedEventArgs e) => ShowPane((string)((FrameworkElement)sender).Tag);
     private void OnShowPixelPane(object sender, RoutedEventArgs e) => ShowPane("pixel");

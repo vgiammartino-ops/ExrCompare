@@ -121,7 +121,8 @@
                                       KeyboardAcceleratorTextOverride="Q" Click="OnOverlaysMenu" />
                 <ToggleMenuFlyoutItem x:Name="HudMenuItem" Text="Image info (HUD)" IsChecked="True" Click="OnHudMenu" />
                 <ToggleMenuFlyoutItem x:Name="DataWindowMenuItem" Text="Data window outline" IsChecked="True" Click="OnOverlaysMenu" />
-                <ToggleMenuFlyoutItem x:Name="SidePaneMenuItem" Text="Side pane" IsChecked="False" Click="OnSidePaneMenu" />
+                <ToggleMenuFlyoutItem x:Name="SidePaneMenuItem" Text="Side pane" IsChecked="False" Click="OnSidePaneMenu"
+                                      KeyboardAcceleratorTextOverride="Ctrl+I" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Contact sheet (layer A)" KeyboardAcceleratorTextOverride="T" Click="OnContactSheetA" />
             </MenuBarItem>
@@ -497,6 +498,11 @@
                 <ComboBox x:Name="FpsCombo" Width="110" SelectionChanged="OnFpsChanged" ToolTipService.ToolTip="Playback frame rate" />
                 <ToggleButton x:Name="LoopToggle" Style="{StaticResource IconToggleStyle}" IsChecked="True" Click="OnLoopToggle" ToolTipService.ToolTip="Loop on / off">
                     <FontIcon Glyph="&#xE8EE;" FontSize="16" />
+                </ToggleButton>
+                <Border Width="1" Margin="4,6" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                <ToggleButton x:Name="SidePaneToggle" Style="{StaticResource IconToggleStyle}" IsChecked="False"
+                              Click="OnSidePaneToggle" ToolTipService.ToolTip="Show side pane (Ctrl+I)">
+                    <FontIcon x:Name="SidePaneIcon" Glyph="&#xEA5B;" FontSize="16" />
                 </ToggleButton>
             </StackPanel>
         </Grid>

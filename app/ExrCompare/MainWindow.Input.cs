@@ -51,6 +51,7 @@ public sealed partial class MainWindow
             case VirtualKey.M: ToggleMatte(); break;
             case VirtualKey.Q: SetOverlays(OverlaysToggle.IsChecked != true); break;
             case VirtualKey.T: LayerPanelA.ToggleContactSheet(); break;
+            case VirtualKey.I when ctrl: SetSidePane(SidePane.Visibility != Visibility.Visible); break;
             case VirtualKey.I:
                 if (shift) Send(new { cmd = "clear_inout" });
                 else OnSetIn(this, new RoutedEventArgs());
