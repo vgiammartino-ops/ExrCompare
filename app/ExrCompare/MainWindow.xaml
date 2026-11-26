@@ -304,8 +304,6 @@
                 </Grid>
             </Border>
             </Grid>
-            </Border>
-            </Grid>
 
             <Border x:Name="SidePane" Grid.Column="1" Width="372" Visibility="Collapsed" BorderThickness="1,0,0,0"
                     BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
