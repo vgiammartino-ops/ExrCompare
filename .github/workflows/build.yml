@@ -134,10 +134,9 @@ jobs:
           $dir = "$env:RUNNER_TEMP\ci-logs"
           New-Item -ItemType Directory -Force $dir | Out-Null
           if (Test-Path logs) { Copy-Item logs/* $dir -ErrorAction SilentlyContinue }
-          Get-ChildItem build/native-build -Recurse -Filter *.log -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'vcpkg' } |
-            Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName "$dir\vcpkg-$($_.Name)" }
+          if (Test-Path build/native-build/vcpkg-manifest-install.log) { Copy-Item build/native-build/vcpkg-manifest-install.log $dir }
           Get-ChildItem "$env:VCPKG_ROOT\buildtrees" -Recurse -Filter "*-err.log" -ErrorAction SilentlyContinue |
-            Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName "$dir\vcpkg-$($_.Directory.Name)-$($_.Name)" }
+            Where-Object { $_.Length -gt 0 } | Select-Object -First 20 | ForEach-Object { Copy-Item $_.FullName "$dir\vcpkg-$($_.Directory.Name)-$($_.Name)" }
           "commit ${{ github.sha }}`nrun ${{ github.run_id }}`njob status ${{ job.status }}`n$(Get-Date -Format o)" | Set-Content "$dir\summary.txt"
           Set-Location $dir
           git init --quiet -b ci-logs

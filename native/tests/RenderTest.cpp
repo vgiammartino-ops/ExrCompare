@@ -58,8 +58,14 @@ int main() {
     for (const char* mode : {"a", "b", "wipe", "stack", "difference", "sidebyside", "overunder"}) {
         call(h, {{"cmd", "compare"}, {"mode", mode}});
         const fs::path out = d.path / (std::string("snap_") + mode + ".png");
-        json r = call(h, {{"cmd", "snapshot"}, {"path", u8(out)}, {"burnin", {std::string("mode ") + mode, "frame 1"}},
-                          {"annotations", {{{"points", {{1, 1}, {30, 20}}}, {"color", {1, 0, 0}}, {"width", 2}}}}}});
+        json stroke = {{"points", json::array({json::array({1, 1}), json::array({30, 20})})},
+                       {"color", json::array({1, 0, 0})},
+                       {"width", 2}};
+        json req = {{"cmd", "snapshot"},
+                    {"path", u8(out)},
+                    {"burnin", json::array({std::string("mode ") + mode, "frame 1"})},
+                    {"annotations", json::array({stroke})}};
+        json r = call(h, req);
         EXPECT(r.value("ok", false));
         EXPECT(r.value("shaderError", "x").empty());
         EXPECT(fs::exists(out) && fs::file_size(out) > 100);
