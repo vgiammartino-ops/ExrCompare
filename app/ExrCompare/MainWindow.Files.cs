@@ -172,7 +172,7 @@ public sealed partial class MainWindow
             }
             var st = s["status"];
             var color = st?["color"];
-            Send(new { cmd = "color", exposure = J.Num(color, "exposure"), gamma = J.Num(color, "gamma", 1), channel = J.Int(color, "channel"),
+            Send(new { cmd = "color", exposure = J.Num(color, "exposure"), gamma = J.Num(color, "gamma", 1), saturation = J.Num(color, "saturation", 1), channel = J.Int(color, "channel"),
                        display = J.Str(color, "display"), view = J.Str(color, "view"), look = J.Str(color, "look"),
                        falseColor = J.Bool(color, "falseColor"), nanHighlight = J.Bool(color, "nanHighlight"), matte = J.Bool(color, "matte"),
                        diffGain = J.Num(color, "diffGain", 1) });
@@ -195,6 +195,7 @@ public sealed partial class MainWindow
             _updating = true;
             ExposureSlider.Value = J.Num(color, "exposure");
             GammaSlider.Value = J.Num(color, "gamma", 1);
+            SaturationSlider.Value = J.Num(color, "saturation", 1);
             ChannelCombo.SelectedIndex = J.Int(color, "channel");
             FalseColorToggle.IsChecked = J.Bool(color, "falseColor");
             NanToggle.IsChecked = J.Bool(color, "nanHighlight");
@@ -285,7 +286,8 @@ public sealed partial class MainWindow
                         "Alt+Up / Down      Next / previous version of A (add Shift for B)\n" +
                         "C R G B A Y        Colour, red, green, blue, alpha, luminance\n" +
                         "M                  Alpha matte overlay\n" +
-                        "0                  Reset exposure and gamma\n" +
+                        "0                  Reset exposure, gamma and saturation\n" +
+                        "Double-click A / B Open a sequence into A / B\n" +
                         "F / 1              Fit / actual size (double-click = fit)\n" +
                         "Mouse wheel        Zoom at the pointer;  drag: pan\n" +
                         "Q                  Overlays on / off\n" +

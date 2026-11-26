@@ -36,7 +36,7 @@ static bool sameState(const RenderState& a, const RenderState& b) {
     return a.hasContent == b.hasContent && sameLayer(a.a, b.a) && sameLayer(a.b, b.b) && a.compare == b.compare &&
            a.wipeX == b.wipeX && a.wipeY == b.wipeY && a.wipeAngle == b.wipeAngle && a.wipeMix == b.wipeMix &&
            a.wipeSoftness == b.wipeSoftness && a.diffGain == b.diffGain && a.exposure == b.exposure &&
-           a.gamma == b.gamma && a.channel == b.channel && a.flags == b.flags && a.program == b.program;
+           a.gamma == b.gamma && a.saturation == b.saturation && a.channel == b.channel && a.flags == b.flags && a.program == b.program;
 }
 
 struct ExrcHandle {

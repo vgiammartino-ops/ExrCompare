@@ -20,7 +20,7 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
 - **Versions:** step a layer up or down through `v###` versions on disk (Alt+Up / Alt+Down).
 
 **Compare modes** (Nuke-style top bar: `A [AOV]  [on/off] [mode]  B [AOV]`; the mouse wheel steps one entry per notch)
-- A only, B only (click the orange A or B)
+- A only, B only (click the orange A or B). **Double-click A or B to open a sequence into that input.**
 - **Wipe:** a Nuke-style widget. Drag the centre to move it, the long handle to rotate, and the arc handle to dissolve B into A.
 - **Stack:** B over A using the layer opacities.
 - **Difference:** |A-B| in scene linear, with gain.
@@ -52,7 +52,7 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
   - Each row: resolution, bbox, channels, `x= y= WxH`, R G B A in scene linear (unclamped; above 1.0 shows as is), a swatch of the displayed colour, H S V and L.
   - Ctrl+drag draws a red box that stays sampled (its average is shown) after you let go; Ctrl+click pins one pixel. The box follows pan and zoom and is re-read on every frame and AOV. Esc or the clear button removes it.
 - **View toggles** (bottom left, after Full screen): false colour, NaN/Inf highlight, alpha matte, half-resolution proxy.
-- **Exposure and gamma** on their own line under the top bar.
+- **Exposure, gamma and saturation** on their own line under the top bar (saturation 0 = greyscale, 1 = unchanged, up to 2; applied in scene linear around Rec.709 luminance). Key 0 resets all three.
 - **Side pane** (layer cards) starts closed. Open or hide it with the pane button at the right end of the transport bar, View → Side pane, or Ctrl+I.
 - A data-window outline is drawn on the image.
 - **Stereo:** multi-view EXR view selector.

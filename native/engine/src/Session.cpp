@@ -207,7 +207,7 @@ struct Session::Impl {
     bool regionActive = false;
     double regU0 = 0, regV0 = 0, regU1 = 0, regV1 = 0;
     float diffGain = 1.0f;
-    float exposureStops = 0.0f, gamma = 1.0f;
+    float exposureStops = 0.0f, gamma = 1.0f, saturation = 1.0f;
     int channel = 0;
     bool nanHighlight = false, falseColor = false, matte = false;
 
@@ -500,6 +500,7 @@ struct Session::Impl {
         rs.diffGain = diffGain;
         rs.exposure = std::exp2(exposureStops);
         rs.gamma = gamma > 0.01f ? gamma : 1.0f;
+        rs.saturation = saturation;
         rs.channel = channel;
         rs.flags = (nanHighlight ? uint32_t(kFlagNanHighlight) : 0u) | (falseColor ? uint32_t(kFlagFalseColor) : 0u) |
                    (matte ? uint32_t(kFlagMatteOverlay) : 0u);
@@ -663,7 +664,7 @@ struct Session::Impl {
     }
 
     json colorJson() const {
-        return {{"exposure", exposureStops}, {"gamma", gamma},       {"channel", channel},
+        return {{"exposure", exposureStops}, {"gamma", gamma}, {"saturation", saturation}, {"channel", channel},
                 {"display", ocio.display()}, {"view", ocio.view()},  {"look", ocio.look()},
                 {"falseColor", falseColor},  {"nanHighlight", nanHighlight}, {"matte", matte},
                 {"diffGain", diffGain}};
@@ -830,6 +831,8 @@ struct Session::Impl {
         float px[4] = {rgba[0], rgba[1], rgba[2], 1.0f};
         const float gain = std::exp2(exposureStops);
         for (int c = 0; c < 3; ++c) px[c] = std::isfinite(px[c]) ? px[c] * gain : 0.0f;
+        const float luma = 0.2126f * px[0] + 0.7152f * px[1] + 0.0722f * px[2];
+        for (int c = 0; c < 3; ++c) px[c] = luma + (px[c] - luma) * saturation;  // as the viewer shows it
         if (slots[s].mode() == LayerMode::Color) {
             try {
                 ocio.toDisplayCpu(slots[s].inputSpace, px, 1, 1);
@@ -1181,6 +1184,7 @@ struct Session::Impl {
         else if (cmd == "color") {
             if (j.contains("exposure")) exposureStops = j["exposure"].get<float>();
             if (j.contains("gamma")) gamma = j["gamma"].get<float>();
+            if (j.contains("saturation")) saturation = std::clamp(j["saturation"].get<float>(), 0.0f, 4.0f);
             if (j.contains("channel")) channel = std::clamp(j["channel"].get<int>(), 0, 5);
             if (j.contains("falseColor")) falseColor = j["falseColor"].get<bool>();
             if (j.contains("nanHighlight")) nanHighlight = j["nanHighlight"].get<bool>();

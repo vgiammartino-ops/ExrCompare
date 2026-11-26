@@ -65,6 +65,7 @@ struct RenderState {
     float diffGain = 1.0f;
     float exposure = 1.0f;       // linear multiplier (2^stops)
     float gamma = 1.0f;
+    float saturation = 1.0f;     // viewer saturation around Rec.709 luminance (1 = unchanged)
     int channel = 0;             // 0 RGB, 1 R, 2 G, 3 B, 4 A, 5 luminance
     uint32_t flags = 0;
     float background[4] = {0, 0, 0, 1};

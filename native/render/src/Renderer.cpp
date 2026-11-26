@@ -373,6 +373,7 @@ void Renderer::draw(const RenderState& s, UINT width, UINT height, ID3D11RenderT
     c.modes[1] = uint32_t(s.channel);
     c.modes[2] = s.flags;
     std::copy(std::begin(s.background), std::end(s.background), c.background);
+    c.background[3] = s.saturation;  // background.w carries viewer saturation (alpha is unused)
 
     auto fillLayer = [](const LayerRender& l, const LayerTexture& t, uint32_t L[4], float P[4], uint32_t X[4]) {
         const bool valid = l.present && l.visible && t.valid;

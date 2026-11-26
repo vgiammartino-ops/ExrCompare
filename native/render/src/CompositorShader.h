@@ -24,7 +24,7 @@ cbuffer Params : register(b0)
     float4 paramsB;
     uint4  extraA;      // depthInvert, hasIsolate, isolateId, unused
     uint4  extraB;
-    float4 background;
+    float4 background;  // rgb background, w = viewer saturation
 };
 
 Texture2D<float4> TexA : register(t0);
@@ -109,6 +109,7 @@ LayerOut EvalLayer(Texture2D<float4> tex, float2 p, float4 rect, uint4 L, float4
         float4 c = bad ? float4(0, 0, 0, 1) : s;
         if (mode == 0u) c = isA ? OCIO_InputA(c) : OCIO_InputB(c);
         c.rgb *= misc.z;
+        c.rgb = lerp(dot(c.rgb, kLuma).xxx, c.rgb, background.w);  // viewer saturation (1 = unchanged)
         if (ch == 1u) c.rgb = c.rrr;
         else if (ch == 2u) c.rgb = c.ggg;
         else if (ch == 3u) c.rgb = c.bbb;

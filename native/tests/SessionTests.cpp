@@ -123,6 +123,12 @@ TEST_CASE("Session: transport, offsets, probe, stats, metadata") {
     call(s, {{"cmd", "clear_region"}});
     CHECK(!call(s, {{"cmd", "analyzer"}})["a"].contains("region"));
     CHECK(call(s, {{"cmd", "wipe"}, {"x", 0.3}})["ok"].get<bool>());
+    json col = call(s, {{"cmd", "color"}, {"saturation", 0.0}});
+    CHECK_NEAR(col["color"]["saturation"].get<double>(), 0.0, 1e-6);
+    json grey = call(s, {{"cmd", "analyzer"}, {"x", 8.5}, {"y", 4.5}});
+    json sw = grey["a"]["pixel"]["display"];
+    CHECK_NEAR(sw[0].get<double>(), sw[1].get<double>(), 1e-4);  // saturation 0 -> neutral swatch
+    call(s, {{"cmd", "color"}, {"saturation", 1.0}});
 }
 
 TEST_CASE("Session: contact sheet, rebuild check, proxy, cache modes, versions, swap, OCIO") {

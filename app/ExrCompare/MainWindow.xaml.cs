@@ -43,6 +43,9 @@ public sealed partial class MainWindow : Window
 
         LayerPanelA.SetSlot(0);
         LayerPanelB.SetSlot(1);
+        // Buttons mark pointer gestures handled, so listen for handled double-taps too.
+        ShowAButton.AddHandler(UIElement.DoubleTappedEvent, new Microsoft.UI.Xaml.Input.DoubleTappedEventHandler((_, _) => OnLetterDoubleTapped(0)), true);
+        ShowBButton.AddHandler(UIElement.DoubleTappedEvent, new Microsoft.UI.Xaml.Input.DoubleTappedEventHandler((_, _) => OnLetterDoubleTapped(1)), true);
         foreach (var panel in new[] { LayerPanelA, LayerPanelB })
         {
             panel.Send = cmd => Send(cmd);
@@ -381,8 +384,28 @@ public sealed partial class MainWindow : Window
     private void OnCompareToggle(object sender, RoutedEventArgs e) =>
         SetCompare(CompareToggle.IsChecked == true ? (string)((ComboBoxItem)CompareCombo.SelectedItem).Tag : "a");
 
-    private void OnShowA(object sender, RoutedEventArgs e) => SetCompare("a");
-    private void OnShowB(object sender, RoutedEventArgs e) => SetCompare("b");
+    private void OnShowA(object sender, RoutedEventArgs e) => LetterClick("a");
+    private void OnShowB(object sender, RoutedEventArgs e) => LetterClick("b");
+
+    // A double-click is also two clicks; remember the compare mode from before the first one so
+    // opening a sequence doesn't leave the viewer stuck on "A only" / "B only".
+    private string _compareBeforeLetter = "wipe";
+    private long _letterClickTicks;
+
+    private void LetterClick(string mode)
+    {
+        long now = Environment.TickCount64;
+        if (now - _letterClickTicks > 600) _compareBeforeLetter = J.Str(_status, "compare");
+        _letterClickTicks = now;
+        SetCompare(mode);
+    }
+
+    /// <summary>Double-clicking the orange A or B opens a sequence into that input.</summary>
+    private void OnLetterDoubleTapped(int slot)
+    {
+        if (_compareBeforeLetter.Length > 0) SetCompare(_compareBeforeLetter);
+        _ = PickAndOpen(slot, folder: false);
+    }
 
     /// <summary>Reflects the engine's compare mode in the A / compare / B bar.</summary>
     private void SyncCompareBar(string compare)
@@ -517,10 +540,18 @@ public sealed partial class MainWindow : Window
         if (!_updating) Send(new { cmd = "color", gamma = e.NewValue });
     }
 
+    private void OnSaturationChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (!_ready) return;
+        SaturationText.Text = e.NewValue.ToString("0.00");
+        if (!_updating) Send(new { cmd = "color", saturation = e.NewValue });
+    }
+
     private void ResetExposure()
     {
         ExposureSlider.Value = 0;
         GammaSlider.Value = 1;
+        SaturationSlider.Value = 1;
     }
 
     private void OnResetExposure(object sender, RoutedEventArgs e) => ResetExposure();

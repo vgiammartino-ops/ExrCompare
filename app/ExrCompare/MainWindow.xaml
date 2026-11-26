@@ -109,7 +109,7 @@
                 <MenuFlyoutSubItem x:Name="BuiltinConfigsMenu" Text="Built-in configs" />
                 <MenuFlyoutItem Text="Use $OCIO / default config" Click="OnDefaultOcio" />
                 <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="Reset exposure and gamma" KeyboardAcceleratorTextOverride="0" Click="OnResetExposure" />
+                <MenuFlyoutItem Text="Reset exposure, gamma and saturation" KeyboardAcceleratorTextOverride="0" Click="OnResetExposure" />
                 <ToggleMenuFlyoutItem x:Name="FalseColorMenuItem" Text="False colour (exposure)" Click="OnColorFlagsMenu" />
                 <ToggleMenuFlyoutItem x:Name="NanMenuItem" Text="Highlight NaN / Inf / negative" Click="OnColorFlagsMenu" />
                 <ToggleMenuFlyoutItem x:Name="MatteMenuItem" Text="Alpha matte overlay" KeyboardAcceleratorTextOverride="M" Click="OnColorFlagsMenu" />
@@ -181,7 +181,7 @@
                 <Border Grid.ColumnSpan="6" Margin="-3,-2" BorderThickness="1" CornerRadius="4"
                         BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" />
                 <Button x:Name="ShowAButton" Content="A" Style="{StaticResource InputLetterStyle}" Click="OnShowA"
-                        ToolTipService.ToolTip="Show A only" />
+                        ToolTipService.ToolTip="Click: show A only. Double-click: open a sequence into A." />
                 <controls:WheelComboBox x:Name="ToolbarAovCombo" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                         IsEnabled="False" SelectionChanged="OnToolbarAovChanged"
                                         ToolTipService.ToolTip="AOV of A. Mouse wheel steps one AOV; B follows while Lock AOV is on." />
@@ -199,7 +199,7 @@
                     <ComboBoxItem Content="over / under" Tag="overunder" />
                 </controls:WheelComboBox>
                 <Button x:Name="ShowBButton" Grid.Column="4" Content="B" Style="{StaticResource InputLetterStyle}" Click="OnShowB"
-                        ToolTipService.ToolTip="Show B only" />
+                        ToolTipService.ToolTip="Click: show B only. Double-click: open a sequence into B." />
                 <controls:WheelComboBox x:Name="ToolbarAovComboB" Grid.Column="5" HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                         IsEnabled="False" SelectionChanged="OnToolbarAovChangedB"
                                         ToolTipService.ToolTip="AOV of B. Mouse wheel steps one AOV." />
@@ -240,6 +240,14 @@
                     <Slider x:Name="GammaSlider" Width="180" Minimum="0.2" Maximum="4" StepFrequency="0.05" Value="1"
                             VerticalAlignment="Center" ValueChanged="OnGammaChanged" />
                     <TextBlock x:Name="GammaText" Text="1.00" Width="34" VerticalAlignment="Center"
+                               DoubleTapped="OnResetExposureTapped" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                            ToolTipService.ToolTip="Saturation (0 = greyscale, 1 = unchanged; double-click the value to reset)">
+                    <FontIcon Glyph="&#xE790;" FontSize="16" />
+                    <Slider x:Name="SaturationSlider" Width="180" Minimum="0" Maximum="2" StepFrequency="0.05" Value="1"
+                            VerticalAlignment="Center" ValueChanged="OnSaturationChanged" />
+                    <TextBlock x:Name="SaturationText" Text="1.00" Width="34" VerticalAlignment="Center"
                                DoubleTapped="OnResetExposureTapped" />
                 </StackPanel>
                 <StackPanel x:Name="DiffGainPanel" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
