@@ -3,6 +3,7 @@
 #include "TestHarness.h"
 
 #include "exrc/Session.h"
+#include "exrc/Waveform.h"
 
 #include <nlohmann/json.hpp>
 
@@ -129,6 +130,15 @@ TEST_CASE("Session: transport, offsets, probe, stats, metadata") {
     json sw = grey["a"]["pixel"]["display"];
     CHECK_NEAR(sw[0].get<double>(), sw[1].get<double>(), 1e-4);  // saturation 0 -> neutral swatch
     call(s, {{"cmd", "color"}, {"saturation", 1.0}});
+    json wf = call(s, {{"cmd", "waveform"}, {"enabled", true}, {"scale", "stops10"}, {"mode", "parade"}});
+    CHECK(wf["waveform"]["enabled"].get<bool>());
+    CHECK(wf["waveform"]["box"].is_array() && wf["waveform"]["labels"].size() > 3);
+    CHECK_EQ(call(s, {{"cmd", "status"}})["waveform"]["mode"].get<std::string>(), std::string("parade"));
+    CHECK(s.update(Clock::now(), 160, 90).wave.enabled);
+    json ref = call(s, {{"cmd", "waveform_reference"}, {"slot", 0}, {"cols", 8}, {"rows", 64}});
+    CHECK_EQ(ref["bins"].size(), waveBinCount(8, 64));
+    call(s, {{"cmd", "waveform"}, {"enabled", false}});
+    CHECK(!s.update(Clock::now(), 160, 90).wave.enabled);
 }
 
 TEST_CASE("Session: contact sheet, rebuild check, proxy, cache modes, versions, swap, OCIO") {

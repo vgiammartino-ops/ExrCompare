@@ -51,7 +51,13 @@ Nothing needs installing. Requires 64-bit Windows 10 (1809+) or Windows 11 and a
 - **Pixel readout** (Nuke's pixel sampler), for A and B at once, in a fixed two-row bar under the viewer:
   - Each row: resolution, bbox, channels, `x= y= WxH`, R G B A in scene linear (unclamped; above 1.0 shows as is), a swatch of the displayed colour, H S V and L.
   - Ctrl+drag draws a red box that stays sampled (its average is shown) after you let go; Ctrl+click pins one pixel. The box follows pan and zoom and is re-read on every frame and AOV. Esc or the clear button removes it.
-- **View toggles** (bottom left, after Full screen): false colour, NaN/Inf highlight, alpha matte, half-resolution proxy.
+- **View toggles** (bottom left, after Full screen): false colour, NaN/Inf highlight, alpha matte, half-resolution proxy, waveform monitor.
+- **Waveform monitor** (Ctrl+Shift+W, View → Waveform monitor, or the bottom-left button): an overlay in a viewer corner, built for HDR.
+  - Every pixel is counted on the GPU from the float data, before the view transform, so values above 1.0 keep their true place.
+  - Default scale: **stops** (log2) around 18% grey, ±8 stops (0.0007 to 46). Lines every stop; labels show stops and linear values; 1.0 (display white) is marked; the frame's peak is a dashed yellow line.
+  - Out-of-range values are never dropped: a red band at the top counts values above the scale, a blue band at the bottom counts values below it (and zero / negative on a log scale). The header shows the peak and the NaN/Inf count; hovering shows the value under the pointer.
+  - Settings (gear): Luma (weights of the working colour space, e.g. ACEScg), RGB parade or RGB overlay; source = what's on screen (follows wipe and zoom), full frame A or B, or the red sample box; ±6/8/10/14 stops or linear 0–1/0–4/0–16; units = scene linear or **display light in nits** (after the view, decoded with the display's curve: sRGB, gamma 2.2/2.4/2.6 or PQ; peak from the view name, e.g. 100 or 1000 nits); corner and size.
+  - Nits are only measured after the view transform; raw EXR values have no nits of their own.
 - **Exposure, gamma and saturation** on their own line under the top bar (saturation 0 = greyscale, 1 = unchanged, up to 2; applied in scene linear around Rec.709 luminance). Key 0 resets all three.
 - **Side pane** (layer cards) starts closed. Open or hide it with the pane button at the right end of the transport bar, View → Side pane, or Ctrl+I.
 - A data-window outline is drawn on the image.

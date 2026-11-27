@@ -10,6 +10,8 @@
 
 #include "exrc/Types.h"
 
+#include <array>
+
 namespace exrc {
 
 struct LutTexture {
@@ -64,6 +66,9 @@ public:
     bool setDisplayView(const std::string& display, const std::string& view, const std::string& look, std::string* error);
 
     std::string sceneLinear() const;  // name of the scene_linear role's colour space
+    // Luminance weights of the scene-linear working space (Y of its primaries in CIE XYZ when the
+    // config has the cie_xyz_d65_interchange role, else the config's luma coefficients).
+    std::array<float, 3> sceneLuma() const;
     // Default input space for a file: the config's file rules, else a linear Rec.709 space if the
     // config has one, else scene_linear.
     std::string guessInputSpace(const fs::path& file) const;

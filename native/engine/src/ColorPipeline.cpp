@@ -73,6 +73,8 @@ OCIO::ConstConfigRcPtr makeLegacyConfig() {
     cfg->addDisplayView("Rec.709 Display", "BT.1886 (gamma 2.4)", "Gamma 2.4 (BT.1886)", "");
     cfg->addDisplayView("Rec.709 Display", "Raw", "Raw", "");
     cfg->setActiveDisplays("sRGB Display, Rec.709 Display");
+    const double luma[3] = {0.2126, 0.7152, 0.0722};  // Rec.709 primaries
+    cfg->setDefaultLumaCoefs(luma);
     cfg->validate();
     return cfg;
 }
@@ -339,6 +341,28 @@ void ColorPipeline::toDisplayCpu(const std::string& colorSpace, float* rgba, int
     OCIO::PackedImageDesc img(rgba, width, height, 4);
     toLinear->apply(img);
     linearToDisplayCpu(rgba, width, height);
+}
+
+std::array<float, 3> ColorPipeline::sceneLuma() const {
+    std::array<float, 3> out{0.2126f, 0.7152f, 0.0722f};
+    const auto& cfg = impl_->config;
+    if (!cfg) return out;
+    try {
+        if (cfg->hasRole("cie_xyz_d65_interchange")) {
+            auto cpu = cfg->getProcessor(sceneLinearName(cfg).c_str(), "cie_xyz_d65_interchange")->getDefaultCPUProcessor();
+            for (int k = 0; k < 3; ++k) {
+                float px[3] = {k == 0 ? 1.0f : 0.0f, k == 1 ? 1.0f : 0.0f, k == 2 ? 1.0f : 0.0f};
+                cpu->applyRGB(px);
+                out[size_t(k)] = px[1];
+            }
+            return out;
+        }
+        double c[3];
+        cfg->getDefaultLumaCoefs(c);
+        if (c[0] + c[1] + c[2] > 0.5) out = {float(c[0]), float(c[1]), float(c[2])};
+    } catch (...) {
+    }
+    return out;
 }
 
 }  // namespace exrc

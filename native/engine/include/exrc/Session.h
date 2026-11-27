@@ -54,6 +54,27 @@ enum RenderFlags : uint32_t {
     kFlagMatteOverlay = 1u << 2,
 };
 
+// Waveform monitor overlay: GPU counting parameters and where to draw it.
+struct WaveformRender {
+    bool enabled = false;
+    int source = 0;                // 0 viewer composite (viewport pixels), 1 layer A texels, 2 layer B texels
+    int area[4] = {0, 0, 0, 0};    // x0, y0, x1, y1 (end exclusive) in the source's pixels
+    int cols = 0, rows = 1024;     // counting bins
+    float lo = 0, hi = 1;          // scale bounds (log2 values when logScale)
+    bool logScale = true;
+    int units = 0;                 // 0 scene-linear, 1 display light (nits)
+    bool includeExposure = false;  // scene units: apply the viewer exposure first
+    float sceneLuma[3] = {0.2126f, 0.7152f, 0.0722f};    // working-space luminance weights
+    float displayLuma[3] = {0.2126f, 0.7152f, 0.0722f};  // display primaries' weights
+    int eotf = 0;                  // see DisplayLight
+    float peakNits = 100;
+    int mode = 0;                  // 0 luma, 1 RGB parade, 2 RGB overlay
+    PixelRect box{0, 0, 0, 0};     // whole overlay incl. header (viewport pixels)
+    PixelRect plot{0, 0, 0, 0};    // trace area
+    std::vector<std::pair<float, float>> lines;  // graticule: (0..1 from the bottom, strength)
+    float density = 1;             // source pixels per column (brightness reference)
+};
+
 struct RenderState {
     bool hasContent = false;
     LayerRender a, b;
@@ -71,6 +92,7 @@ struct RenderState {
     float background[4] = {0, 0, 0, 1};
     std::shared_ptr<const ShaderProgram> program;
     int globalFrame = 0;
+    WaveformRender wave;  // only drawn on screen, never in snapshots
 };
 
 class Session {

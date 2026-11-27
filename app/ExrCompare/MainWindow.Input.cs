@@ -32,6 +32,7 @@ public sealed partial class MainWindow
             case VirtualKey.PageDown: LayerPanelA.StepAov(+1); if (!J.Bool(_status, "lockAov", true)) LayerPanelB.StepAov(+1); break;
             case VirtualKey.Up when alt: ChangeVersion(shift ? 1 : 0, +1); break;
             case VirtualKey.Down when alt: ChangeVersion(shift ? 1 : 0, -1); break;
+            case VirtualKey.W when ctrl && shift: ToggleWaveform(); break;
             case VirtualKey.W: ToggleWipe(); break;
             case VirtualKey.D: SetCompare("difference"); break;
             case VirtualKey.S when ctrl: _ = SaveSession(); break;
@@ -62,6 +63,7 @@ public sealed partial class MainWindow
             case VirtualKey.F11: ToggleFullScreen(); break;
             case VirtualKey.Escape:
                 if (SampleActive) ClearSample();
+                else if (WaveOn) SetWaveform(false);
                 else if (AppWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen) ToggleFullScreen();
                 else handled = false;
                 break;

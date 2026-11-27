@@ -35,6 +35,13 @@ public:
     // Copies a BGRA texture to CPU memory (tightly packed rows).
     std::vector<uint8_t> readback(ID3D11Texture2D* texture, UINT width, UINT height);
 
+    // Waveform: GPU counts for a state (renders it offscreen first), read back for tests.
+    std::vector<uint32_t> computeWaveform(const RenderState& state, UINT width, UINT height);
+    // Last on-screen waveform's peak value (in its units) and NaN/Inf count (luma plane).
+    float waveformPeak() const { return wavePeak_; }
+    uint32_t waveformNaN() const { return waveNan_; }
+    std::string lastWaveformError() const { return waveError_; }
+
     ID3D11Device* device() const { return device_.Get(); }
     bool deviceLost() const { return deviceLost_; }
     std::string lastShaderError() const { return shaderError_; }
@@ -52,12 +59,16 @@ private:
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
         Microsoft::WRL::ComPtr<ID3D11SamplerState> sampler;
         UINT textureSlot = 0, samplerSlot = 0;
+        std::string textureName, samplerName;  // to find the same LUT in the waveform compute shader
     };
 
     void createRenderTarget();
     void upload(LayerTexture& lt, const FramePtr& frame);
     bool ensureProgram(const std::shared_ptr<const ShaderProgram>& program);
     void draw(const RenderState& state, UINT width, UINT height, ID3D11RenderTargetView* target);
+    bool ensureWaveform(const RenderState& state);
+    void dispatchWaveform(const RenderState& state);
+    void drawWaveform(const RenderState& state, ID3D11RenderTargetView* target);
 
     Microsoft::WRL::ComPtr<ID3D11Device> device_;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
@@ -71,6 +82,21 @@ private:
     std::vector<LutBinding> luts_;
     uint64_t programId_ = 0;
     std::string shaderError_;
+    std::string source_;  // last compositor source (the waveform compute shader extends it)
+
+    Microsoft::WRL::ComPtr<ID3D11ComputeShader> waveCs_;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> wavePs_;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> waveParams_, waveDraw_, waveBins_, waveTail_;
+    Microsoft::WRL::ComPtr<ID3D11UnorderedAccessView> waveUav_;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> waveSrv_;
+    Microsoft::WRL::ComPtr<ID3D11BlendState> waveBlend_;
+    std::vector<std::pair<UINT, UINT>> waveLutSlots_;  // per luts_ entry: texture, sampler slot in the CS
+    uint64_t waveProgramId_ = ~0ull;
+    size_t waveBinCount_ = 0;
+    bool waveTailPending_ = false;
+    float wavePeak_ = 0;
+    uint32_t waveNan_ = 0;
+    std::string waveError_;
 
     LayerTexture texA_, texB_;
     HANDLE waitable_ = nullptr;

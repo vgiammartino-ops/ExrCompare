@@ -7,6 +7,9 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <algorithm>
+#include <vector>
 #include <iostream>
 #include <string>
 
@@ -88,6 +91,56 @@ int main(int argc, char** argv) {
     }
     call(h, {{"cmd", "color"}, {"nanHighlight", true}, {"falseColor", true}, {"matte", true}, {"exposure", 1.0}, {"gamma", 2.2}});
     EXPECT(call(h, {{"cmd", "snapshot"}, {"path", u8(d.path / "flags.png")}}).value("ok", false));
+
+    // Waveform: the GPU counts every texel of A (raw scene-linear values); they must match the
+    // engine's CPU reference. Columns and totals exactly; rows may differ by one bin at a boundary
+    // (GPU log2 vs CPU log2), measured as the largest per-column CDF gap.
+    call(h, {{"cmd", "color"}, {"nanHighlight", false}, {"falseColor", false}, {"matte", false}, {"exposure", 0.0}, {"gamma", 1.0}});
+    call(h, {{"cmd", "aov"}, {"slot", 0}, {"index", 0}});
+    call(h, {{"cmd", "layer_set"}, {"slot", 0}, {"mode", "raw"}});
+    for (const char* scale : {"stops8", "linear1"}) {
+        call(h, {{"cmd", "waveform"}, {"enabled", true}, {"source", "a"}, {"scale", scale}, {"units", "scene"}});
+        const int cols = 64, rows = 256;
+        json g = call(h, {{"cmd", "waveform_bins"}, {"cols", cols}, {"rows", rows}});
+        json c = call(h, {{"cmd", "waveform_reference"}, {"slot", 0}, {"cols", cols}, {"rows", rows}});
+        if (!g.value("error", "").empty()) std::cerr << "waveform: " << g["error"].get<std::string>() << "\n";
+        EXPECT(g.value("ok", false) && g["bins"].size() == c["bins"].size());
+        if (g["bins"].size() != c["bins"].size()) break;
+        const auto gb = g["bins"].get<std::vector<uint32_t>>(), cb = c["bins"].get<std::vector<uint32_t>>();
+        const size_t tail = size_t(4) * (rows + 2) * cols;
+        uint64_t total = 0, maxGap = 0;
+        bool columnsMatch = true;
+        for (int p = 0; p < 4; ++p) {
+            for (int col = 0; col < cols; ++col) {
+                int64_t cg = 0, cc = 0;
+                for (int r = 0; r < rows + 2; ++r) {
+                    const size_t i = (size_t(p) * (rows + 2) + r) * cols + col;
+                    cg += gb[i];
+                    cc += cb[i];
+                    maxGap = std::max<uint64_t>(maxGap, uint64_t(std::llabs(cg - cc)));
+                }
+                columnsMatch &= cg == cc;
+                total += uint64_t(cg);
+            }
+        }
+        for (int k = 0; k < 4; ++k) EXPECT(gb[tail + k] == cb[tail + k]);  // NaN / Inf counts
+        float pg, pc;
+        std::memcpy(&pg, &gb[tail + 4], 4);
+        std::memcpy(&pc, &cb[tail + 4], 4);
+        std::cout << "waveform " << scale << ": " << total << " samples, columns match " << columnsMatch
+                  << ", max CDF gap " << maxGap << ", peak GPU " << pg << " CPU " << pc << "\n";
+        EXPECT(columnsMatch && total > 0);
+        EXPECT(maxGap <= 2);
+        EXPECT(std::abs(pg - pc) <= 1e-6f * std::max(1.0f, pc));
+    }
+    // Display-light (nits) units and the viewer source go through OCIO in the compute shader.
+    call(h, {{"cmd", "layer_set"}, {"slot", 0}, {"mode", "auto"}});
+    call(h, {{"cmd", "compare"}, {"mode", "wipe"}});
+    call(h, {{"cmd", "waveform"}, {"source", "viewer"}, {"units", "nits"}, {"scale", "stops8"}});
+    json gn = call(h, {{"cmd", "waveform_bins"}, {"cols", 32}, {"rows", 128}});
+    if (!gn.value("error", "").empty()) std::cerr << "waveform nits: " << gn["error"].get<std::string>() << "\n";
+    EXPECT(gn.value("ok", false) && gn.value("error", "x").empty() && gn["bins"].size() > 0);
+    call(h, {{"cmd", "waveform"}, {"enabled", false}, {"units", "scene"}});
 
     // Every display/view of the default config must compile.
     json oc = call(h, {{"cmd", "ocio"}});

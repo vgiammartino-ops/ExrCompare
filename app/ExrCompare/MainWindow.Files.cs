@@ -171,6 +171,13 @@ public sealed partial class MainWindow
                 Send(set.ToJsonString());
             }
             var st = s["status"];
+            if (st?["waveform"] is JsonObject wf)
+            {
+                var set = new JsonObject();
+                foreach (var key in new[] { "enabled", "mode", "source", "scale", "units", "corner", "size", "exposure" })
+                    if (wf[key] is JsonNode v) set[key] = v.DeepClone();
+                SendWave(set);
+            }
             var color = st?["color"];
             Send(new { cmd = "color", exposure = J.Num(color, "exposure"), gamma = J.Num(color, "gamma", 1), saturation = J.Num(color, "saturation", 1), channel = J.Int(color, "channel"),
                        display = J.Str(color, "display"), view = J.Str(color, "view"), look = J.Str(color, "look"),
@@ -294,7 +301,8 @@ public sealed partial class MainWindow
                         "T                  Contact sheet of A's AOVs\n" +
                         "Ctrl+drag          Pixel Analyzer: sample a box (stays until cleared)\n" +
                         "Ctrl+click         Pixel Analyzer: pin one pixel\n" +
-                        "Esc                Clear the pixel sample\n" +
+                        "Esc                Clear the pixel sample, then hide the waveform\n" +
+                        "Ctrl+Shift+W       Waveform monitor (HDR, scene-linear stops or display nits)\n" +
                         "Alt+click          Isolate Cryptomatte / ID object\n" +
                         "Ctrl+O / Ctrl+Shift+O   Open into A / B\n" +
                         "Ctrl+E             Export snapshot\n" +

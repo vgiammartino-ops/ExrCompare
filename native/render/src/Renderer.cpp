@@ -1,6 +1,8 @@
 #include "exrc/Renderer.h"
 
 #include "CompositorShader.h"
+#include "WaveformShader.h"
+#include "exrc/Waveform.h"
 
 #include <d3dcompiler.h>
 
@@ -206,6 +208,7 @@ bool Renderer::ensureProgram(const std::shared_ptr<const ShaderProgram>& program
         source += kFallbackOcio;
     }
     source += kCompositorMain;
+    source_ = source;
 
     auto compile = [&](const char* entry, const char* target, ComPtr<ID3DBlob>& code) {
         ComPtr<ID3DBlob> errors;
@@ -242,6 +245,8 @@ bool Renderer::ensureProgram(const std::shared_ptr<const ShaderProgram>& program
                 LutBinding b;
                 b.textureSlot = texBind.BindPoint;
                 b.samplerSlot = sampBind.BindPoint;
+                b.textureName = t.textureName;
+                b.samplerName = t.samplerName;
                 // RGB LUTs are padded to RGBA (RGB32F textures can't always be sampled).
                 const size_t texels = size_t(t.width) * t.height * t.depth;
                 std::vector<float> data;
@@ -418,6 +423,10 @@ void Renderer::draw(const RenderState& s, UINT width, UINT height, ID3D11RenderT
 void Renderer::render(const RenderState& state) {
     if (!rtv_ || deviceLost_) return;
     draw(state, width_, height_, rtv_.Get());
+    if (state.hasContent && state.wave.enabled && ensureWaveform(state)) {
+        dispatchWaveform(state);
+        drawWaveform(state, rtv_.Get());
+    }
     const HRESULT hr = swapChain_->Present(1, 0);
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) deviceLost_ = true;
 }
@@ -457,6 +466,253 @@ std::vector<uint8_t> Renderer::readback(ID3D11Texture2D* texture, UINT width, UI
     for (UINT y = 0; y < height; ++y)
         std::memcpy(out.data() + size_t(y) * width * 4, static_cast<const uint8_t*>(mapped.pData) + size_t(y) * mapped.RowPitch,
                     size_t(width) * 4);
+    context_->Unmap(staging.Get(), 0);
+    return out;
+}
+
+// ------------------------------------------------------------------ waveform --
+
+namespace {
+
+struct alignas(16) WaveParamsCB {
+    uint32_t size[4];  // cols, rows, source, units
+    int32_t area[4];
+    float scale[4];    // lo, hi, log, include exposure
+    float luma[4];     // scene luma, peak nits
+    float disp[4];     // display luma, eotf
+};
+
+struct alignas(16) WaveDrawCB {
+    float plot[4];
+    float box[4];
+    uint32_t dims[4];  // cols, rows, mode, line count
+    float extra[4];    // density, peak t
+    float lines[16][4];
+};
+
+}  // namespace
+
+bool Renderer::ensureWaveform(const RenderState& s) {
+    try {
+        if (!wavePs_) {
+            ComPtr<ID3DBlob> code, errors;
+            if (FAILED(D3DCompile(kWaveDraw, std::strlen(kWaveDraw), "WaveDraw.hlsl", nullptr, nullptr, "WavePS", "ps_5_0",
+                                  D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &errors))) {
+                waveError_ = errors ? std::string(static_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize())
+                                    : "WavePS compile failed";
+                return false;
+            }
+            check(device_->CreatePixelShader(code->GetBufferPointer(), code->GetBufferSize(), nullptr, &wavePs_), "CreatePixelShader(wave)");
+            D3D11_BUFFER_DESC bd{};
+            bd.Usage = D3D11_USAGE_DEFAULT;
+            bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            bd.ByteWidth = sizeof(WaveParamsCB);
+            check(device_->CreateBuffer(&bd, nullptr, &waveParams_), "CreateBuffer(wave params)");
+            bd.ByteWidth = sizeof(WaveDrawCB);
+            check(device_->CreateBuffer(&bd, nullptr, &waveDraw_), "CreateBuffer(wave draw)");
+            D3D11_BUFFER_DESC td{};
+            td.Usage = D3D11_USAGE_STAGING;
+            td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            td.ByteWidth = 5 * 4;
+            check(device_->CreateBuffer(&td, nullptr, &waveTail_), "CreateBuffer(wave tail)");
+            D3D11_BLEND_DESC blend{};
+            auto& rt = blend.RenderTarget[0];
+            rt.BlendEnable = TRUE;
+            rt.SrcBlend = D3D11_BLEND_ONE;  // premultiplied
+            rt.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+            rt.BlendOp = D3D11_BLEND_OP_ADD;
+            rt.SrcBlendAlpha = D3D11_BLEND_ONE;
+            rt.DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+            rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+            rt.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+            check(device_->CreateBlendState(&blend, &waveBlend_), "CreateBlendState(wave)");
+        }
+        // The compute shader shares the compositor's OCIO code: rebuild it with the program.
+        if (!waveCs_ || waveProgramId_ != programId_) {
+            waveProgramId_ = programId_;
+            waveCs_.Reset();
+            waveLutSlots_.clear();
+            const std::string src = source_ + kWaveCompute;
+            ComPtr<ID3DBlob> code, errors;
+            if (FAILED(D3DCompile(src.data(), src.size(), "Waveform.hlsl", nullptr, nullptr, "WaveCS", "cs_5_0",
+                                  D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &errors))) {
+                waveError_ = "WaveCS: " + (errors ? std::string(static_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize())
+                                                  : std::string("compile failed"));
+                return false;
+            }
+            check(device_->CreateComputeShader(code->GetBufferPointer(), code->GetBufferSize(), nullptr, &waveCs_), "CreateComputeShader(wave)");
+            ComPtr<ID3D11ShaderReflection> reflect;
+            check(D3DReflect(code->GetBufferPointer(), code->GetBufferSize(), IID_PPV_ARGS(&reflect)), "D3DReflect(wave)");
+            for (const LutBinding& l : luts_) {
+                D3D11_SHADER_INPUT_BIND_DESC tb{}, sb{};
+                if (FAILED(reflect->GetResourceBindingDescByName(l.textureName.c_str(), &tb)) ||
+                    FAILED(reflect->GetResourceBindingDescByName(l.samplerName.c_str(), &sb))) {
+                    waveLutSlots_.emplace_back(UINT(-1), UINT(-1));  // not used by the compute shader
+                    continue;
+                }
+                waveLutSlots_.emplace_back(tb.BindPoint, sb.BindPoint);
+            }
+            waveError_.clear();
+        }
+        const size_t count = waveBinCount(s.wave.cols, s.wave.rows);
+        if (count != waveBinCount_) {
+            waveBins_.Reset();
+            waveUav_.Reset();
+            waveSrv_.Reset();
+            D3D11_BUFFER_DESC bd{};
+            bd.Usage = D3D11_USAGE_DEFAULT;
+            bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
+            bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+            bd.ByteWidth = UINT(count * 4);
+            check(device_->CreateBuffer(&bd, nullptr, &waveBins_), "CreateBuffer(wave bins)");
+            D3D11_UNORDERED_ACCESS_VIEW_DESC ud{};
+            ud.Format = DXGI_FORMAT_R32_TYPELESS;
+            ud.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+            ud.Buffer.NumElements = UINT(count);
+            ud.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
+            check(device_->CreateUnorderedAccessView(waveBins_.Get(), &ud, &waveUav_), "CreateUnorderedAccessView(wave)");
+            D3D11_SHADER_RESOURCE_VIEW_DESC sd{};
+            sd.Format = DXGI_FORMAT_R32_TYPELESS;
+            sd.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+            sd.BufferEx.NumElements = UINT(count);
+            sd.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+            check(device_->CreateShaderResourceView(waveBins_.Get(), &sd, &waveSrv_), "CreateShaderResourceView(wave)");
+            waveBinCount_ = count;
+            waveTailPending_ = false;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        waveError_ = e.what();
+        return false;
+    }
+}
+
+// Counts on the GPU. Needs draw() first (it uploads the textures and fills the constants).
+void Renderer::dispatchWaveform(const RenderState& s) {
+    const WaveformRender& w = s.wave;
+    // Peak / NaN of the previous dispatch, if the copy has landed (never stalls).
+    if (waveTailPending_) {
+        D3D11_MAPPED_SUBRESOURCE m{};
+        if (SUCCEEDED(context_->Map(waveTail_.Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &m))) {
+            const auto* t = static_cast<const uint32_t*>(m.pData);
+            waveNan_ = t[3];
+            std::memcpy(&wavePeak_, &t[4], 4);
+            context_->Unmap(waveTail_.Get(), 0);
+            waveTailPending_ = false;
+        }
+    }
+
+    WaveParamsCB p{};
+    p.size[0] = uint32_t(w.cols);
+    p.size[1] = uint32_t(w.rows);
+    p.size[2] = uint32_t(w.source);
+    p.size[3] = uint32_t(w.units);
+    for (int i = 0; i < 4; ++i) p.area[i] = w.area[i];
+    p.scale[0] = w.lo;
+    p.scale[1] = w.hi;
+    p.scale[2] = w.logScale ? 1.0f : 0.0f;
+    p.scale[3] = w.includeExposure ? 1.0f : 0.0f;
+    for (int i = 0; i < 3; ++i) p.luma[i] = w.sceneLuma[i], p.disp[i] = w.displayLuma[i];
+    p.luma[3] = w.peakNits;
+    p.disp[3] = float(w.eotf);
+    context_->UpdateSubresource(waveParams_.Get(), 0, nullptr, &p, 0, 0);
+
+    const UINT zero[4] = {0, 0, 0, 0};
+    context_->ClearUnorderedAccessViewUint(waveUav_.Get(), zero);
+
+    const bool va = s.a.present && s.a.visible && texA_.valid, vb = s.b.present && s.b.visible && texB_.valid;
+    ID3D11Buffer* cbs[2] = {constants_.Get(), waveParams_.Get()};
+    ID3D11ShaderResourceView* srvs[2] = {va ? texA_.srv.Get() : nullptr, vb ? texB_.srv.Get() : nullptr};
+    ID3D11SamplerState* samp = linearSampler_.Get();
+    ID3D11UnorderedAccessView* uav = waveUav_.Get();
+    context_->CSSetShader(waveCs_.Get(), nullptr, 0);
+    context_->CSSetConstantBuffers(0, 2, cbs);
+    context_->CSSetShaderResources(0, 2, srvs);
+    context_->CSSetSamplers(0, 1, &samp);
+    for (size_t i = 0; i < luts_.size() && i < waveLutSlots_.size(); ++i) {
+        if (waveLutSlots_[i].first == UINT(-1)) continue;
+        ID3D11ShaderResourceView* srv = luts_[i].srv.Get();
+        ID3D11SamplerState* ls = luts_[i].sampler.Get();
+        context_->CSSetShaderResources(waveLutSlots_[i].first, 1, &srv);
+        context_->CSSetSamplers(waveLutSlots_[i].second, 1, &ls);
+    }
+    context_->CSSetUnorderedAccessViews(0, 1, &uav, nullptr);
+    const UINT aw = UINT(std::max(0, w.area[2] - w.area[0])), ah = UINT(std::max(0, w.area[3] - w.area[1]));
+    context_->Dispatch((aw + 15) / 16, (ah + 15) / 16, 1);
+    ID3D11UnorderedAccessView* noUav = nullptr;
+    context_->CSSetUnorderedAccessViews(0, 1, &noUav, nullptr);
+    ID3D11ShaderResourceView* noSrv[2] = {nullptr, nullptr};
+    context_->CSSetShaderResources(0, 2, noSrv);
+
+    if (!waveTailPending_) {
+        D3D11_BOX tail{};
+        tail.left = UINT((waveBinCount_ - 5) * 4);
+        tail.right = UINT(waveBinCount_ * 4);
+        tail.top = 0, tail.bottom = 1, tail.front = 0, tail.back = 1;
+        context_->CopySubresourceRegion(waveTail_.Get(), 0, 0, 0, 0, waveBins_.Get(), 0, &tail);
+        waveTailPending_ = true;
+    }
+}
+
+void Renderer::drawWaveform(const RenderState& s, ID3D11RenderTargetView* target) {
+    const WaveformRender& w = s.wave;
+    WaveDrawCB d{};
+    d.plot[0] = float(w.plot.x0), d.plot[1] = float(w.plot.y0), d.plot[2] = float(w.plot.x1), d.plot[3] = float(w.plot.y1);
+    d.box[0] = float(w.box.x0), d.box[1] = float(w.box.y0), d.box[2] = float(w.box.x1), d.box[3] = float(w.box.y1);
+    d.dims[0] = uint32_t(w.cols);
+    d.dims[1] = uint32_t(w.rows);
+    d.dims[2] = uint32_t(w.mode);
+    const size_t lines = std::min<size_t>(w.lines.size(), 32);
+    d.dims[3] = uint32_t(lines);
+    for (size_t i = 0; i < lines; ++i) {
+        d.lines[i / 2][(i & 1) * 2 + 0] = w.lines[i].first;
+        d.lines[i / 2][(i & 1) * 2 + 1] = w.lines[i].second;
+    }
+    d.extra[0] = w.density;
+    d.extra[1] = -1.0f;
+    if (wavePeak_ > 0.0f && std::isfinite(wavePeak_)) {
+        const float v = w.logScale ? std::log2(wavePeak_) : wavePeak_;
+        const float t = (v - w.lo) / (w.hi - w.lo);
+        if (t >= 0.0f && t <= 1.0f) d.extra[1] = t;
+    }
+    context_->UpdateSubresource(waveDraw_.Get(), 0, nullptr, &d, 0, 0);
+
+    D3D11_VIEWPORT vp{float(w.box.x0), float(w.box.y0), float(w.box.x1 - w.box.x0), float(w.box.y1 - w.box.y0), 0.0f, 1.0f};
+    context_->OMSetRenderTargets(1, &target, nullptr);
+    context_->RSSetViewports(1, &vp);
+    const float factor[4] = {0, 0, 0, 0};
+    context_->OMSetBlendState(waveBlend_.Get(), factor, 0xffffffff);
+    ID3D11Buffer* cb = waveDraw_.Get();
+    ID3D11ShaderResourceView* srv = waveSrv_.Get();
+    context_->VSSetShader(vs_.Get(), nullptr, 0);
+    context_->PSSetShader(wavePs_.Get(), nullptr, 0);
+    context_->PSSetConstantBuffers(0, 1, &cb);
+    context_->PSSetShaderResources(0, 1, &srv);
+    context_->Draw(3, 0);
+    ID3D11ShaderResourceView* none = nullptr;
+    context_->PSSetShaderResources(0, 1, &none);
+    context_->OMSetBlendState(nullptr, factor, 0xffffffff);
+}
+
+std::vector<uint32_t> Renderer::computeWaveform(const RenderState& state, UINT width, UINT height) {
+    std::vector<uint32_t> out;
+    if (!state.hasContent || !state.wave.enabled) return out;
+    renderOffscreen(state, width, height);  // uploads the frames and fills the constants
+    if (!ensureWaveform(state)) return out;
+    dispatchWaveform(state);
+    D3D11_BUFFER_DESC bd{};
+    waveBins_->GetDesc(&bd);
+    bd.Usage = D3D11_USAGE_STAGING;
+    bd.BindFlags = 0;
+    bd.MiscFlags = 0;
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    ComPtr<ID3D11Buffer> staging;
+    check(device_->CreateBuffer(&bd, nullptr, &staging), "CreateBuffer(wave readback)");
+    context_->CopyResource(staging.Get(), waveBins_.Get());
+    D3D11_MAPPED_SUBRESOURCE m{};
+    check(context_->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &m), "Map(wave readback)");
+    out.resize(waveBinCount_);
+    std::memcpy(out.data(), m.pData, waveBinCount_ * 4);
     context_->Unmap(staging.Get(), 0);
     return out;
 }

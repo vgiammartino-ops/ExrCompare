@@ -141,6 +141,7 @@ public sealed partial class MainWindow : Window
         // XAML doesn't clip a Canvas: without this the wipe line and outlines draw over the
         // title bar, toolbar, readout and timeline.
         Overlay.Clip = new RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height) };
+        if (_ready && WaveOn) SendWave(new JsonObject());  // header height follows the display scale
         SizeWipeLine();
         if (!_ready) return;
         _core.Resize(PixelWidth(), PixelHeight(), Viewer.CompositionScaleX, Viewer.CompositionScaleY);
@@ -163,6 +164,7 @@ public sealed partial class MainWindow : Window
             _lastRenderError = err;
         }
         if (_tick % 6 == 0) UpdateCacheStrips();
+        if (_tick % 6 == 3) UpdateWaveStats();
         if (_tick % 5 == 0 && _geometryDirty) RefreshGeometry();
     }
 
@@ -192,6 +194,7 @@ public sealed partial class MainWindow : Window
         DiffGainPanel.Visibility = compare == "difference" ? Visibility.Visible : Visibility.Collapsed;
         _updating = false;
         SyncWipeFromStatus();
+        ApplyWaveform(_status["waveform"] as JsonObject);
 
         CurrentFrameText.Text = frame.ToString();
         PlayIcon.Glyph = playing && dir > 0 ? "\uE769" : "\uE768";

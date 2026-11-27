@@ -125,6 +125,8 @@
                                       KeyboardAcceleratorTextOverride="Q" Click="OnOverlaysMenu" />
                 <ToggleMenuFlyoutItem x:Name="HudMenuItem" Text="Image info (HUD)" IsChecked="True" Click="OnHudMenu" />
                 <ToggleMenuFlyoutItem x:Name="DataWindowMenuItem" Text="Data window outline" IsChecked="True" Click="OnOverlaysMenu" />
+                <ToggleMenuFlyoutItem x:Name="WaveformMenuItem" Text="Waveform monitor" KeyboardAcceleratorTextOverride="Ctrl+Shift+W"
+                                      Click="OnWaveformMenu" />
                 <ToggleMenuFlyoutItem x:Name="SidePaneMenuItem" Text="Side pane" IsChecked="False" Click="OnSidePaneMenu"
                                       KeyboardAcceleratorTextOverride="Ctrl+I" />
                 <MenuFlyoutSeparator />
@@ -265,6 +267,31 @@
                 <SwapChainPanel x:Name="Viewer" Loaded="OnViewerLoaded" CompositionScaleChanged="OnViewerScaleChanged" />
                 <Canvas x:Name="Overlay" IsHitTestVisible="False" />
 
+                <!-- Waveform overlay: traces are drawn by the GPU; header, labels and menu sit on top. -->
+                <Canvas x:Name="WaveLayer" Visibility="Collapsed">
+                    <Canvas x:Name="WaveLabels" IsHitTestVisible="False" />
+                    <Grid x:Name="WaveHeader" Padding="10,0,4,0" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="WaveTitle" FontSize="12" VerticalAlignment="Center" Opacity="0.85" IsHitTestVisible="False" />
+                        <TextBlock x:Name="WaveReadout" Grid.Column="1" FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   IsHitTestVisible="False" />
+                        <Button x:Name="WaveSettingsButton" Grid.Column="2" Style="{StaticResource SmallIconButtonStyle}"
+                                ToolTipService.ToolTip="Waveform settings: mode, source, scale, units, corner, size">
+                            <FontIcon Glyph="&#xE713;" FontSize="13" />
+                        </Button>
+                        <Button Grid.Column="3" Style="{StaticResource SmallIconButtonStyle}" Click="OnWaveClose"
+                                ToolTipService.ToolTip="Hide waveform (Ctrl+Shift+W)">
+                            <FontIcon Glyph="&#xE711;" FontSize="11" />
+                        </Button>
+                    </Grid>
+                </Canvas>
+
                 <Border x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20,12"
                         CornerRadius="16" Background="{ThemeResource SolidBackgroundFillColorTertiaryBrush}">
                     <StackPanel Spacing="6">
@@ -404,6 +431,10 @@
                 <ToggleButton x:Name="ProxyToggle" Style="{StaticResource IconToggleStyle}" Click="OnProxyToggle" VerticalAlignment="Center"
                               ToolTipService.ToolTip="Half-resolution proxy (uses mip level 1 when the EXR has one)">
                     <FontIcon Glyph="&#xE71F;" FontSize="16" />
+                </ToggleButton>
+                <ToggleButton x:Name="WaveformToggle" Style="{StaticResource IconToggleStyle}" Click="OnWaveformToggle" VerticalAlignment="Center"
+                              ToolTipService.ToolTip="Waveform monitor, HDR scene-linear (Ctrl+Shift+W)">
+                    <FontIcon Glyph="&#xE9D9;" FontSize="16" />
                 </ToggleButton>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">

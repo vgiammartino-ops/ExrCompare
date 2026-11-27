@@ -38,6 +38,7 @@ add_library(exrc_engine STATIC
     engine/src/CompareLayout.cpp
     engine/src/ColorPipeline.cpp
     engine/src/Analysis.cpp
+    engine/src/Waveform.cpp
     engine/src/Session.cpp
 )
 target_include_directories(exrc_engine PUBLIC engine/include)

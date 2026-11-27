@@ -8,6 +8,7 @@
 #include "exrc/FrameCache.h"
 #include "exrc/PlaybackController.h"
 #include "exrc/SequenceScanner.h"
+#include "exrc/Waveform.h"
 
 #include <ImfMultiView.h>
 #include <ImfStringVectorAttribute.h>
@@ -325,4 +326,71 @@ TEST_CASE("rebuild sum / difference and contact sheet") {
     auto rs = regionStats(*beauty, 0, 0, 1, 1);
     CHECK_EQ(rs.count, 4);
     CHECK_NEAR(rs.mean[0], 1.0, 1e-9);
+}
+
+// ----------------------------------------------------------------------- waveform --
+TEST_CASE("Waveform: stops scale, rows, display light and CPU reference") {
+    const WaveScale st = waveScale("stops8", 0, 100);
+    CHECK(st.logScale);
+    CHECK_NEAR(st.lo, std::log2(0.18f) - 8, 1e-5);
+    CHECK_NEAR(st.hi, std::log2(0.18f) + 8, 1e-5);
+    const int rows = 1024;
+    // 0.18 sits at the middle; 1.0 at (2.47 + 8) / 16 of the height; HDR 16.0 still in range.
+    CHECK_EQ(waveRow(0.18f * 1.0001f, st.lo, st.hi, true, rows), 1 + rows / 2);
+    CHECK_EQ(waveRow(1.0f, st.lo, st.hi, true, rows), 1 + int((0.0f - st.lo) / (st.hi - st.lo) * rows));
+    CHECK(waveRow(16.0f, st.lo, st.hi, true, rows) <= rows);
+    CHECK_EQ(waveRow(1000.0f, st.lo, st.hi, true, rows), rows + 1);  // above the scale
+    CHECK_EQ(waveRow(0.0f, st.lo, st.hi, true, rows), 0);           // zero / negative: below
+    CHECK_EQ(waveRow(-1.0f, st.lo, st.hi, true, rows), 0);
+    CHECK_EQ(waveRow(std::nanf(""), st.lo, st.hi, true, rows), -1);
+    CHECK_EQ(waveRow(INFINITY, st.lo, st.hi, true, rows), -1);
+    const WaveScale lin = waveScale("linear4", 0, 100);
+    CHECK(!lin.logScale && lin.hi == 4.0f);
+    CHECK_EQ(waveRow(-0.5f, lin.lo, lin.hi, false, rows), 0);
+    CHECK_EQ(waveRow(2.0f, lin.lo, lin.hi, false, rows), 1 + rows / 2);
+    const WaveScale nits = waveScale("stops8", 1, 1000);
+    CHECK_NEAR(std::exp2(nits.hi), 1250.0, 1.0);
+
+    CHECK_EQ(displayLight("sRGB - Display", "ACES 2.0 - SDR 100 nits (Rec.709)").eotf, 0);
+    CHECK_NEAR(displayLight("sRGB - Display", "ACES 2.0 - SDR 100 nits (Rec.709)").peakNits, 100.0, 1e-3);
+    const DisplayLight pq = displayLight("Rec.2100-PQ - Display", "ACES 2.0 - HDR 1000 nits (P3 D65)");
+    CHECK_EQ(pq.eotf, 3);
+    CHECK_NEAR(pq.peakNits, 1000.0, 1e-3);
+    CHECK_NEAR(pq.luma[0], 0.2627, 1e-4);
+    CHECK_EQ(displayLight("Rec.1886 Rec.709 - Display", "ACES 2.0 - SDR 100 nits (Rec.709)").eotf, 2);
+    CHECK_EQ(displayLight("sRGB Display", "Gamma 2.2").eotf, 1);
+    CHECK_EQ(displayLight("Rec.709 Display", "BT.1886 (gamma 2.4)").eotf, 2);
+
+    // Reference count: 4x2 float frame with known values.
+    auto f = std::make_shared<Frame>();
+    f->width = 4;
+    f->height = 2;
+    f->channels = 4;
+    f->format = PixelFormat::Float;
+    const float px[8][4] = {{0.18f, 0.18f, 0.18f, 1}, {1, 1, 1, 1},  {16, 16, 16, 1},   {1000, 0, 0, 1},
+                            {0, 0, 0, 1},             {-1, 2, 2, 1}, {NAN, 1, 1, 1},    {0.001f, 0.001f, 0.001f, 1}};
+    f->data.resize(sizeof px);
+    std::memcpy(f->data.data(), px, sizeof px);
+    const int cols = 4;
+    const std::array<float, 3> luma{0.2126f, 0.7152f, 0.0722f};
+    auto bins = waveformReference(*f, 0, 0, 4, 2, cols, rows, st, luma);
+    CHECK_EQ(bins.size(), waveBinCount(cols, rows));
+    auto at = [&](int plane, int row, int col) { return bins[(size_t(plane) * (rows + 2) + row) * cols + col]; };
+    const size_t nanBase = size_t(4) * (rows + 2) * cols;
+    CHECK_EQ(at(3, waveRow(0.18f, st.lo, st.hi, true, rows), 0), 1u);   // grey in column 0
+    CHECK_EQ(at(0, rows + 1, 3), 1u);                                   // R = 1000: above, column 3
+    CHECK_EQ(at(0, 0, 1), 1u);                                          // R = -1: below, column 1
+    CHECK_EQ(bins[nanBase + 0], 1u);                                    // the NaN red
+    CHECK_EQ(bins[nanBase + 3], 1u);                                    // its luma is NaN too
+    float peak;
+    std::memcpy(&peak, &bins[nanBase + 4], 4);
+    CHECK_NEAR(peak, 1000.0, 1e-3);
+    uint64_t total = 0;
+    for (size_t i = 0; i < nanBase; ++i) total += bins[i];
+    CHECK_EQ(total, uint64_t(8 * 4 - 2));  // every sample counted once, except the two NaNs
+
+    PixelRect box, plot;
+    waveformBox(1920, 1080, "br", "m", 32, box, plot);
+    CHECK(box.x1 <= 1920 - 11 && box.y1 <= 1080 - 11 && box.x0 > 960);
+    CHECK_NEAR(plot.y0 - box.y0, 32.0, 1e-9);
 }

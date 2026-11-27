@@ -32,11 +32,22 @@ static bool sameLayer(const LayerRender& a, const LayerRender& b) {
            a.depthInvert == b.depthInvert && a.motionScale == b.motionScale && a.isolateId == b.isolateId &&
            a.hasIsolate == b.hasIsolate;
 }
+static bool sameWave(const WaveformRender& a, const WaveformRender& b) {
+    if (a.enabled != b.enabled) return false;
+    if (!a.enabled) return true;
+    auto rect = [](const PixelRect& x, const PixelRect& y) { return x.x0 == y.x0 && x.y0 == y.y0 && x.x1 == y.x1 && x.y1 == y.y1; };
+    return a.source == b.source && std::equal(a.area, a.area + 4, b.area) && a.cols == b.cols && a.rows == b.rows &&
+           a.lo == b.lo && a.hi == b.hi && a.logScale == b.logScale && a.units == b.units &&
+           a.includeExposure == b.includeExposure && std::equal(a.sceneLuma, a.sceneLuma + 3, b.sceneLuma) &&
+           std::equal(a.displayLuma, a.displayLuma + 3, b.displayLuma) && a.eotf == b.eotf && a.peakNits == b.peakNits &&
+           a.mode == b.mode && rect(a.box, b.box) && rect(a.plot, b.plot) && a.lines == b.lines && a.density == b.density;
+}
+
 static bool sameState(const RenderState& a, const RenderState& b) {
     return a.hasContent == b.hasContent && sameLayer(a.a, b.a) && sameLayer(a.b, b.b) && a.compare == b.compare &&
            a.wipeX == b.wipeX && a.wipeY == b.wipeY && a.wipeAngle == b.wipeAngle && a.wipeMix == b.wipeMix &&
            a.wipeSoftness == b.wipeSoftness && a.diffGain == b.diffGain && a.exposure == b.exposure &&
-           a.gamma == b.gamma && a.saturation == b.saturation && a.channel == b.channel && a.flags == b.flags && a.program == b.program;
+           a.gamma == b.gamma && a.saturation == b.saturation && sameWave(a.wave, b.wave) && a.channel == b.channel && a.flags == b.flags && a.program == b.program;
 }
 
 struct ExrcHandle {
@@ -52,6 +63,9 @@ struct ExrcHandle {
     bool resizePending = false;
     std::string renderError;
     std::string shaderError;
+    std::string waveError;
+    float wavePeak = 0;
+    uint32_t waveNan = 0;
 
     // Snapshots render on the calling thread with their own device.
     std::unique_ptr<Renderer> still;
@@ -87,6 +101,9 @@ struct ExrcHandle {
                 const std::string se = renderer->lastShaderError();
                 std::lock_guard lock(m);
                 shaderError = se;
+                waveError = renderer->lastWaveformError();
+                wavePeak = renderer->waveformPeak();
+                waveNan = renderer->waveformNaN();
                 if (renderer->deviceLost()) {
                     renderError = "The graphics device was removed or reset. Restart the app.";
                     running = false;
@@ -97,6 +114,24 @@ struct ExrcHandle {
                 running = false;
             }
         }
+    }
+
+    // GPU waveform counts of the current frame with the session's waveform settings (tests).
+    json waveformBins(const json& j) {
+        int w = 0, hgt = 0;
+        if (!session->canvasSize(w, hgt)) throw std::runtime_error("Nothing loaded");
+        RenderState rs = session->stillState(std::clamp(w, 16, 4096), std::clamp(hgt, 16, 4096));
+        if (!rs.wave.enabled) throw std::runtime_error("Waveform is off or has no source");
+        rs.wave.cols = std::clamp(j.value("cols", rs.wave.cols), 1, 4096);
+        rs.wave.rows = std::clamp(j.value("rows", rs.wave.rows), 1, 4096);
+        if (!still) {
+            still = std::make_unique<Renderer>();
+            const char* warp = std::getenv("EXRC_FORCE_WARP");
+            still->createDevice(warp && *warp == '1');
+        }
+        auto bins = still->computeWaveform(rs, UINT(std::clamp(w, 16, 4096)), UINT(std::clamp(hgt, 16, 4096)));
+        return {{"bins", bins}, {"cols", rs.wave.cols}, {"rows", rs.wave.rows}, {"error", still->lastWaveformError()},
+                {"shaderError", still->lastShaderError()}};
     }
 
     json snapshot(const json& j) {
@@ -183,6 +218,15 @@ EXRC_API int exrc_call(ExrcHandle* h, const char* text, char* out, int capacity)
             const std::string cmd = j.value("cmd", "");
             if (cmd == "snapshot") {
                 json r = h->snapshot(j);
+                r["ok"] = true;
+                result = r.dump(-1, ' ', false, json::error_handler_t::replace);
+            } else if (cmd == "waveform_stats") {
+                // Peak and NaN/Inf count of the on-screen waveform (one frame behind; never stalls).
+                std::lock_guard lock(h->m);
+                result = json{{"ok", true}, {"peak", h->wavePeak}, {"nan", h->waveNan}, {"error", h->waveError}}
+                             .dump(-1, ' ', false, json::error_handler_t::replace);
+            } else if (cmd == "waveform_bins") {
+                json r = h->waveformBins(j);
                 r["ok"] = true;
                 result = r.dump(-1, ' ', false, json::error_handler_t::replace);
             } else if (cmd == "render_status") {

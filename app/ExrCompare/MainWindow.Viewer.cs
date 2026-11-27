@@ -269,6 +269,7 @@ public sealed partial class MainWindow
         _dragStart = _dragLast = p;
         _drag = Drag.None;
         if (!J.Bool(_status, "hasContent")) return;
+        if (InWave(p)) return;  // the waveform overlay never pans, wipes or samples the image
         bool left = pt.Properties.IsLeftButtonPressed, middle = pt.Properties.IsMiddleButtonPressed;
         if (middle) _drag = Drag.Pan;
         else if (left && IsKeyDown(VirtualKey.Menu)) { IsolateAt(p); return; }
@@ -291,6 +292,12 @@ public sealed partial class MainWindow
     private void OnViewerPointerMoved(object sender, PointerRoutedEventArgs e)
     {
         var p = e.GetCurrentPoint(ViewerArea).Position;
+        if (_drag == Drag.None && InWave(p))
+        {
+            UpdateWaveHover(p);
+            return;
+        }
+        ClearWaveHover();
         _lastPointer = p;
         double dx = p.X - _dragLast.X, dy = p.Y - _dragLast.Y;
         switch (_drag)
@@ -370,6 +377,7 @@ public sealed partial class MainWindow
 
     private void OnViewerPointerExited(object sender, PointerRoutedEventArgs e)
     {
+        ClearWaveHover();
         if (_drag != Drag.None) return;
         _lastPointer = null;
         RefreshAnalyzer();  // readout falls back to the pinned sample (or clears)
@@ -379,6 +387,7 @@ public sealed partial class MainWindow
     {
         if (!J.Bool(_status, "hasContent")) return;
         var pt = e.GetCurrentPoint(ViewerArea);
+        if (InWave(pt.Position)) return;
         double factor = Math.Pow(1.1, pt.Properties.MouseWheelDelta / 120.0);
         var (x, y) = ToPx(pt.Position);
         ViewAction(new { cmd = "view", action = "zoom", factor, x, y });
@@ -388,6 +397,7 @@ public sealed partial class MainWindow
     private void OnViewerDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
         if (IsKeyDown(VirtualKey.Control)) return;  // Ctrl+click samples, it doesn't refit
+        if (InWave(e.GetPosition(ViewerArea))) return;
         ViewAction(new { cmd = "view", action = "fit" });
     }
 

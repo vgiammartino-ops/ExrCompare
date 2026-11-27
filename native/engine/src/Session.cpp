@@ -1,4 +1,5 @@
 #include "exrc/Session.h"
+#include "exrc/Waveform.h"
 
 #include "exrc/Analysis.h"
 #include "exrc/ExrReader.h"
@@ -205,6 +206,18 @@ struct Session::Impl {
     // Pixel Analyzer sample region, normalised to the image (0..1) so it follows pan/zoom and
     // samples the same image area in A and B.
     bool regionActive = false;
+    // Waveform monitor overlay settings.
+    struct WaveSettings {
+        bool enabled = false;
+        std::string mode = "luma";      // luma | parade | overlay
+        std::string source = "viewer";  // viewer | a | b | sample
+        std::string scale = "stops8";   // stops6/8/10/14 | linear1/4/16
+        std::string units = "scene";    // scene | nits
+        std::string corner = "br";      // br | bl | tr | tl
+        std::string size = "m";         // s | m | l
+        bool exposure = false;          // scene units: include the viewer exposure
+        int headerPx = 32;              // header strip height (device pixels, set by the app)
+    } wave;
     double regU0 = 0, regV0 = 0, regU1 = 0, regV1 = 0;
     float diffGain = 1.0f;
     float exposureStops = 0.0f, gamma = 1.0f, saturation = 1.0f;
@@ -490,6 +503,97 @@ struct Session::Impl {
         }
     }
 
+    static int waveModeIndex(const std::string& m) { return m == "parade" ? 1 : m == "overlay" ? 2 : 0; }
+
+    // Waveform overlay: what to count (GPU) and where to draw it. Called after fillLayer/fillCommon.
+    void fillWave(RenderState& rs, const Layout& L, int w, int h) {
+        WaveformRender& wv = rs.wave;
+        if (!wave.enabled) return;
+        const DisplayLight dl = displayLight(ocio.display(), ocio.view());
+        const int units = wave.units == "nits" ? 1 : 0;
+        const WaveScale sc = waveScale(wave.scale, units, dl.peakNits);
+        waveformBox(w, h, wave.corner, wave.size, wave.headerPx, wv.box, wv.plot);
+        wv.cols = std::clamp(int(wv.plot.x1 - wv.plot.x0), 32, 2048);
+        wv.rows = 1024;
+        wv.lo = sc.lo;
+        wv.hi = sc.hi;
+        wv.logScale = sc.logScale;
+        wv.units = units;
+        wv.includeExposure = wave.exposure;
+        const auto luma = ocio.sceneLuma();
+        std::copy(luma.begin(), luma.end(), wv.sceneLuma);
+        std::copy(dl.luma.begin(), dl.luma.end(), wv.displayLuma);
+        wv.eotf = dl.eotf;
+        wv.peakNits = dl.peakNits;
+        wv.mode = waveModeIndex(wave.mode);
+        for (const WaveLine& l : sc.lines) wv.lines.emplace_back(l.t, l.strength);
+
+        std::string src = wave.source;
+        if (src == "sample" && !regionActive) src = "viewer";
+        if (src == "viewer") {
+            // Columns follow the screen over the visible image(s), as composited (wipe sides etc.).
+            double x0 = 1e30, y0 = 1e30, x1 = -1e30, y1 = -1e30;
+            for (int s = 0; s < 2; ++s) {
+                const bool show = s == 0 ? L.showA : L.showB;
+                const LayerRender& lr = s == 0 ? rs.a : rs.b;
+                if (!show || !lr.present) continue;
+                const PixelRect& r = s == 0 ? L.a : L.b;
+                x0 = std::min(x0, r.x0), y0 = std::min(y0, r.y0), x1 = std::max(x1, r.x1), y1 = std::max(y1, r.y1);
+            }
+            wv.area[0] = std::clamp(int(std::floor(x0)), 0, w);
+            wv.area[1] = std::clamp(int(std::floor(y0)), 0, h);
+            wv.area[2] = std::clamp(int(std::ceil(x1)), 0, w);
+            wv.area[3] = std::clamp(int(std::ceil(y1)), 0, h);
+            wv.source = 0;
+        } else {
+            const int s = src == "a" ? 0 : src == "b" ? 1 : (L.showA && slots[0].loaded ? 0 : 1);
+            const LayerRender& lr = s == 0 ? rs.a : rs.b;
+            if (!lr.present || !lr.frame || lr.frame->missing) return;
+            const FramePtr& f = lr.frame;
+            if (src == "sample") {
+                wv.area[0] = int(std::floor(regU0 * f->width));
+                wv.area[1] = int(std::floor(regV0 * f->height));
+                wv.area[2] = std::max(wv.area[0] + 1, int(std::ceil(regU1 * f->width)));
+                wv.area[3] = std::max(wv.area[1] + 1, int(std::ceil(regV1 * f->height)));
+            } else {
+                wv.area[0] = wv.area[1] = 0;
+                wv.area[2] = f->width;
+                wv.area[3] = f->height;
+            }
+            wv.source = s + 1;
+        }
+        const double aw = wv.area[2] - wv.area[0], ah = wv.area[3] - wv.area[1];
+        if (aw <= 0 || ah <= 0) return;
+        wv.density = float(aw * ah / wv.cols);
+        wv.enabled = true;
+    }
+
+    json waveJson() const {
+        json j = {{"enabled", wave.enabled}, {"mode", wave.mode},     {"source", wave.source},
+                  {"scale", wave.scale},     {"units", wave.units},   {"corner", wave.corner},
+                  {"size", wave.size},       {"exposure", wave.exposure}};
+        if (!wave.enabled) return j;
+        const DisplayLight dl = displayLight(ocio.display(), ocio.view());
+        const WaveScale sc = waveScale(wave.scale, wave.units == "nits" ? 1 : 0, dl.peakNits);
+        PixelRect box, plot;
+        waveformBox(vpW, vpH, wave.corner, wave.size, wave.headerPx, box, plot);
+        auto r = [](const PixelRect& p) { return json{p.x0, p.y0, p.x1, p.y1}; };
+        j["box"] = r(box);
+        j["plot"] = r(plot);
+        j["lo"] = sc.lo;
+        j["hi"] = sc.hi;
+        j["log"] = sc.logScale;
+        j["peakNits"] = dl.peakNits;
+        j["effectiveSource"] = wave.source == "sample" && !regionActive ? "viewer" : wave.source;
+        json labels = json::array();
+        for (const WaveLine& l : sc.lines) {
+            if (l.label.empty()) continue;
+            labels.push_back({{"y", plot.y1 - l.t * (plot.y1 - plot.y0)}, {"text", l.label}, {"strength", l.strength}});
+        }
+        j["labels"] = labels;
+        return j;
+    }
+
     void fillCommon(RenderState& rs, int w, int h) {
         rs.compare = compare;
         rs.wipeX = wipeX * w;
@@ -658,6 +762,7 @@ struct Session::Impl {
         }
         j["layers"] = layers;
         j["color"] = colorJson();
+        j["waveform"] = waveJson();
         j["wipe"] = {{"x", wipeX}, {"y", wipeY}, {"angle", wipeAngle}, {"mix", wipeMix}, {"softness", wipeSoft}};
         j["view"] = {{"fit", view.fit}, {"zoom", view.zoom}, {"panX", view.panX}, {"panY", view.panY}};
         return j;
@@ -975,6 +1080,38 @@ struct Session::Impl {
             }
             return analyzerJson(std::nullopt);
         }
+        if (cmd == "waveform") {
+            auto pick = [&](const char* key, std::string& field, std::initializer_list<const char*> allowed) {
+                if (!j.contains(key)) return;
+                const std::string v = j[key].get<std::string>();
+                for (const char* a : allowed)
+                    if (v == a) field = v;
+            };
+            if (j.contains("enabled")) wave.enabled = j["enabled"].get<bool>();
+            pick("mode", wave.mode, {"luma", "parade", "overlay"});
+            pick("source", wave.source, {"viewer", "a", "b", "sample"});
+            pick("scale", wave.scale, {"stops6", "stops8", "stops10", "stops14", "linear1", "linear4", "linear16"});
+            pick("units", wave.units, {"scene", "nits"});
+            pick("corner", wave.corner, {"br", "bl", "tr", "tl"});
+            pick("size", wave.size, {"s", "m", "l"});
+            if (j.contains("exposure")) wave.exposure = j["exposure"].get<bool>();
+            if (j.contains("headerPx")) wave.headerPx = std::clamp(j["headerPx"].get<int>(), 0, 200);
+            return {{"waveform", waveJson()}};
+        }
+        // CPU reference count of a layer's whole current frame (raw values, scene units): for tests.
+        if (cmd == "waveform_reference") {
+            const int s = slotArg();
+            const int cols = std::clamp(j.value("cols", 64), 1, 4096), rows = std::clamp(j.value("rows", 256), 1, 4096);
+            const int lf = layerFrame(s, ctrl.current());
+            FramePtr f = inRange(s, lf) ? lookup(s, lf) : nullptr;
+            if (!f) {
+                if (auto src = source(s, slots[s].effectiveAov())) f = src->decode(lf);
+            }
+            if (!f || f->missing) throw std::runtime_error("No frame");
+            const WaveScale sc = waveScale(wave.scale, 0, 100.0f);
+            const auto luma = ocio.sceneLuma();
+            return {{"bins", waveformReference(*f, 0, 0, f->width, f->height, cols, rows, sc, luma)}};
+        }
         if (cmd == "clear_region") {
             regionActive = false;
             return {{"regionActive", false}};
@@ -1249,6 +1386,7 @@ RenderState Session::update(TimePoint now, int w, int h) {
     I.fillLayer(rs.a, 0, g, L.a, L.showA, false);
     I.fillLayer(rs.b, 1, g, L.b, L.showB, false);
     I.fillCommon(rs, I.vpW, I.vpH);
+    I.fillWave(rs, L, I.vpW, I.vpH);
 
     const bool ready = (!rs.a.present || rs.a.frame) && (!rs.b.present || rs.b.frame);
     if (I.ctrl.playing() && ready && g != I.lastShown) I.shown.push_back(now);
@@ -1271,6 +1409,7 @@ RenderState Session::stillState(int w, int h) {
     I.fillLayer(rs.b, 1, g, L.b, L.showB, true);
     // The wipe line keeps its relative position.
     I.fillCommon(rs, w, h);
+    I.fillWave(rs, L, w, h);
     return rs;
 }
 
