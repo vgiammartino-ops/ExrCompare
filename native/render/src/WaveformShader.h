@@ -196,14 +196,20 @@ float4 WavePS(float4 pos : SV_Position) : SV_Target
     uint last = mode == 0u ? 3u : (mode == 1u ? uint(k) : 2u);
     float3 sum = float3(0, 0, 0);
     float lum = 0.0;
-    for (uint c = ca; c < cb; ++c)
-        for (uint r = ra; r < rb; ++r)
-            for (uint pl = first; pl <= last; ++pl)
+    [loop] for (uint c = ca; c < cb; ++c)
+    {
+        [loop] for (uint r = ra; r < rb; ++r)
+        {
+            [loop] for (uint pl = first; pl <= last; ++pl)
             {
                 float n = float(Bin(pl, r, c));
-                if (pl == 3u) lum += n;
-                else sum[pl] += n;
+                if (pl == 0u) sum.r += n;
+                else if (pl == 1u) sum.g += n;
+                else if (pl == 2u) sum.b += n;
+                else lum += n;
             }
+        }
+    }
     float span = float((cb - ca) * (rb - ra));
     float ref = max(1.0, extra.x * span / float(rows) * 24.0);
     float norm = 1.0 / log2(1.0 + ref);
@@ -227,7 +233,7 @@ float4 WavePS(float4 pos : SV_Position) : SV_Target
     }
 
     float3 grid = float3(0, 0, 0);
-    for (uint i = 0u; i < dims.w; ++i)
+    [loop] for (uint i = 0u; i < dims.w; ++i)
     {
         float4 pair = lines[i / 2u];
         float2 l = (i & 1u) ? pair.zw : pair.xy;
