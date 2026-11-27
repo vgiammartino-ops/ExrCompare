@@ -1,0 +1,57 @@
+MSBuild version 18.12.2-1.26514.2+04f6ca984 for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule D:/a/ExrCompare/ExrCompare/native/CMakeLists.txt
+  Types.cpp
+  SequenceScanner.cpp
+  ExrReader.cpp
+  FrameCache.cpp
+  DecodeScheduler.cpp
+  PlaybackController.cpp
+  ViewTransform.cpp
+  CompareLayout.cpp
+  ColorPipeline.cpp
+D:\a\ExrCompare\ExrCompare\native\engine\src\ColorPipeline.cpp(105,36): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [D:\a\ExrCompare\ExrCompare\build\native-build\exrc_engine.vcxproj]
+  Analysis.cpp
+  Waveform.cpp
+  Session.cpp
+D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(476,84): warning C4458: declaration of 'shown' hides class member [D:\a\ExrCompare\ExrCompare\build\native-build\exrc_engine.vcxproj]
+      D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(231,27):
+      see declaration of 'exrc::Session::Impl::shown'
+  
+D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(877,22): warning C4458: declaration of 'm' hides class member [D:\a\ExrCompare\ExrCompare\build\native-build\exrc_engine.vcxproj]
+      D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(188,16):
+      see declaration of 'exrc::Session::Impl::m'
+  
+D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(1269,35): warning C4458: declaration of 'm' hides class member [D:\a\ExrCompare\ExrCompare\build\native-build\exrc_engine.vcxproj]
+      D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(188,16):
+      see declaration of 'exrc::Session::Impl::m'
+  
+D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(1302,22): warning C4458: declaration of 'm' hides class member [D:\a\ExrCompare\ExrCompare\build\native-build\exrc_engine.vcxproj]
+      D:\a\ExrCompare\ExrCompare\native\engine\src\Session.cpp(188,16):
+      see declaration of 'exrc::Session::Impl::m'
+  
+  Generating Code...
+  exrc_engine.vcxproj -> D:\a\ExrCompare\ExrCompare\build\native-build\Release\exrc_engine.lib
+  Building Custom Rule D:/a/ExrCompare/ExrCompare/native/CMakeLists.txt
+  Building Custom Rule D:/a/ExrCompare/ExrCompare/native/CMakeLists.txt
+  exrcore.cpp
+  TestMain.cpp
+  EngineTests.cpp
+  SessionTests.cpp
+D:\a\ExrCompare\ExrCompare\native\capi\exrcore.cpp(129,37): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [D:\a\ExrCompare\ExrCompare\build\native-build\exrcore.vcxproj]
+D:\a\ExrCompare\ExrCompare\native\capi\exrcore.cpp(147,37): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [D:\a\ExrCompare\ExrCompare\build\native-build\exrcore.vcxproj]
+D:\a\ExrCompare\ExrCompare\native\capi\exrcore.cpp(257,33): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [D:\a\ExrCompare\ExrCompare\build\native-build\exrcore.vcxproj]
+  Renderer.cpp
+  OcioTests.cpp
+  Snapshot.cpp
+  Generating Code...
+  Generating Code...
+     Creating library D:/a/ExrCompare/ExrCompare/build/native-build/Release/exrcore.lib and object D:/a/ExrCompare/ExrCompare/build/native-build/Release/exrcore.exp
+  exrcore.vcxproj -> D:\a\ExrCompare\ExrCompare\build\native-build\Release\exrcore.dll
+  Building Custom Rule D:/a/ExrCompare/ExrCompare/native/CMakeLists.txt
+  RenderTest.cpp
+  exrc_tests.vcxproj -> D:\a\ExrCompare\ExrCompare\build\native-build\Release\exrc_tests.exe
+  exrcore_render_test.vcxproj -> D:\a\ExrCompare\ExrCompare\build\native-build\Release\exrcore_render_test.exe
+  Building Custom Rule D:/a/ExrCompare/ExrCompare/native/CMakeLists.txt
+-- Installing: D:/a/ExrCompare/ExrCompare/build/native/bin/exrcore.dll

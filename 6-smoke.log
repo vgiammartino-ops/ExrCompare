@@ -1,0 +1,428 @@
+samples written to D:\a\_temp\samples
+build/publish/ExrCompare/ExrCompare.exe exit code 0
+snapshot OK: 22527 bytes
+{
+  "status": {
+    "align": "fit",
+    "cacheBudget": 8587180000,
+    "cacheBytes": 5512240,
+    "cacheMode": "lookahead",
+    "color": {
+      "channel": 0,
+      "diffGain": 1.0,
+      "display": "sRGB Display",
+      "exposure": 0.0,
+      "falseColor": false,
+      "gamma": 1.0,
+      "look": "",
+      "matte": false,
+      "nanHighlight": false,
+      "saturation": 1.0,
+      "view": "sRGB"
+    },
+    "compare": "wipe",
+    "direction": 1,
+    "first": 1,
+    "fps": [
+      24000,
+      1001
+    ],
+    "fpsLabel": "23.976",
+    "frame": 1,
+    "hasContent": true,
+    "in": 1,
+    "last": 10,
+    "layers": [
+      {
+        "aov": 0,
+        "aovName": "RGBA",
+        "error": "",
+        "frame": 1,
+        "inRange": true,
+        "loaded": true,
+        "missing": false,
+        "mode": "color",
+        "pattern": "a.####.exr",
+        "proxy": false,
+        "ready": true
+      },
+      {
+        "aov": 0,
+        "aovName": "RGBA",
+        "error": "",
+        "frame": 1,
+        "inRange": true,
+        "loaded": true,
+        "missing": false,
+        "mode": "color",
+        "pattern": "b.####.exr",
+        "proxy": false,
+        "ready": true
+      }
+    ],
+    "lockAov": true,
+    "loop": true,
+    "measuredFps": 0.0,
+    "ok": true,
+    "out": 10,
+    "playAllFrames": false,
+    "playing": false,
+    "proxy": false,
+    "view": {
+      "fit": true,
+      "panX": 0.0,
+      "panY": 0.0,
+      "zoom": 1.0
+    },
+    "waveform": {
+      "corner": "br",
+      "enabled": false,
+      "exposure": false,
+      "mode": "luma",
+      "scale": "stops8",
+      "size": "m",
+      "source": "viewer",
+      "units": "scene"
+    },
+    "wipe": {
+      "angle": 0.0,
+      "mix": 0.0,
+      "softness": 0.0,
+      "x": 0.5,
+      "y": 0.5
+    }
+  },
+  "render": {
+    "attached": true,
+    "error": "",
+    "ok": true,
+    "shaderError": ""
+  },
+  "ocio": {
+    "builtins": [
+      {
+        "name": "ocio://exrcompare-legacy-srgb",
+        "recommended": false,
+        "uiName": "Linear sRGB / Rec.709 (legacy, no tone mapping)"
+      },
+      {
+        "name": "ocio://cg-config-v1.0.0_aces-v1.3_ocio-v2.1",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v1.0.0] [ACES v1.3] [OCIO v2.1]"
+      },
+      {
+        "name": "ocio://cg-config-v2.1.0_aces-v1.3_ocio-v2.3",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v2.0.0] [ACES v1.3] [OCIO v2.3]"
+      },
+      {
+        "name": "ocio://cg-config-v2.2.0_aces-v1.3_ocio-v2.4",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v2.2.0] [ACES v1.3] [OCIO v2.4]"
+      },
+      {
+        "name": "ocio://cg-config-v4.0.0_aces-v2.0_ocio-v2.5",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v4.0.0] [ACES v2.0] [OCIO v2.5]"
+      },
+      {
+        "name": "ocio://cg-config-v5.0.0_aces-v2.1_ocio-v2.6",
+        "recommended": true,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v5.0.0] [ACES v2.1] [OCIO v2.6]"
+      },
+      {
+        "name": "ocio://studio-config-v1.0.0_aces-v1.3_ocio-v2.1",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v1.0.0] [ACES v1.3] [OCIO v2.1]"
+      },
+      {
+        "name": "ocio://studio-config-v2.1.0_aces-v1.3_ocio-v2.3",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v2.0.0] [ACES v1.3] [OCIO v2.3]"
+      },
+      {
+        "name": "ocio://studio-config-v2.2.0_aces-v1.3_ocio-v2.4",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v2.2.0] [ACES v1.3] [OCIO v2.4]"
+      },
+      {
+        "name": "ocio://studio-config-v4.0.0_aces-v2.0_ocio-v2.5",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v4.0.0] [ACES v2.0] [OCIO v2.5]"
+      },
+      {
+        "name": "ocio://studio-config-v5.0.0_aces-v2.1_ocio-v2.6",
+        "recommended": true,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v5.0.0] [ACES v2.1] [OCIO v2.6]"
+      }
+    ],
+    "colorSpaces": [
+      "Linear Rec.709 (sRGB)",
+      "sRGB",
+      "Rec.709",
+      "Gamma 2.4 (BT.1886)",
+      "Gamma 2.2",
+      "Raw"
+    ],
+    "display": "sRGB Display",
+    "displays": [
+      "sRGB Display",
+      "Rec.709 Display"
+    ],
+    "error": "",
+    "look": "",
+    "looks": [],
+    "name": "exrcompare-legacy-srgb",
+    "ok": true,
+    "sceneLinear": "Linear Rec.709 (sRGB)",
+    "source": "ocio://exrcompare-legacy-srgb",
+    "version": "2.6.0",
+    "view": "sRGB",
+    "views": [
+      "sRGB",
+      "Gamma 2.2",
+      "Raw"
+    ]
+  },
+  "snapshot": {
+    "centerBGRA": [
+      187,
+      187,
+      232,
+      255
+    ],
+    "height": 128,
+    "ok": true,
+    "path": "D:\\a\\_temp\\smoke-folder.png",
+    "shaderError": "",
+    "width": 256
+  }
+}
+build/publish/single/ExrCompare.exe exit code 0
+snapshot OK: 22822 bytes
+{
+  "status": {
+    "align": "fit",
+    "cacheBudget": 8587180000,
+    "cacheBytes": 5512240,
+    "cacheMode": "lookahead",
+    "color": {
+      "channel": 0,
+      "diffGain": 1.0,
+      "display": "sRGB - Display",
+      "exposure": 0.0,
+      "falseColor": false,
+      "gamma": 1.0,
+      "look": "",
+      "matte": false,
+      "nanHighlight": false,
+      "saturation": 1.0,
+      "view": "ACES 2.0 - SDR 100 nits (Rec.709)"
+    },
+    "compare": "wipe",
+    "direction": 1,
+    "first": 1,
+    "fps": [
+      24000,
+      1001
+    ],
+    "fpsLabel": "23.976",
+    "frame": 1,
+    "hasContent": true,
+    "in": 1,
+    "last": 10,
+    "layers": [
+      {
+        "aov": 0,
+        "aovName": "RGBA",
+        "error": "",
+        "frame": 1,
+        "inRange": true,
+        "loaded": true,
+        "missing": false,
+        "mode": "color",
+        "pattern": "a.####.exr",
+        "proxy": false,
+        "ready": true
+      },
+      {
+        "aov": 0,
+        "aovName": "RGBA",
+        "error": "",
+        "frame": 1,
+        "inRange": true,
+        "loaded": true,
+        "missing": false,
+        "mode": "color",
+        "pattern": "b.####.exr",
+        "proxy": false,
+        "ready": true
+      }
+    ],
+    "lockAov": true,
+    "loop": true,
+    "measuredFps": 0.0,
+    "ok": true,
+    "out": 10,
+    "playAllFrames": false,
+    "playing": false,
+    "proxy": false,
+    "view": {
+      "fit": true,
+      "panX": 0.0,
+      "panY": 0.0,
+      "zoom": 1.0
+    },
+    "waveform": {
+      "corner": "br",
+      "enabled": false,
+      "exposure": false,
+      "mode": "luma",
+      "scale": "stops8",
+      "size": "m",
+      "source": "viewer",
+      "units": "scene"
+    },
+    "wipe": {
+      "angle": 0.0,
+      "mix": 0.0,
+      "softness": 0.0,
+      "x": 0.5,
+      "y": 0.5
+    }
+  },
+  "render": {
+    "attached": true,
+    "error": "",
+    "ok": true,
+    "shaderError": ""
+  },
+  "ocio": {
+    "builtins": [
+      {
+        "name": "ocio://exrcompare-legacy-srgb",
+        "recommended": false,
+        "uiName": "Linear sRGB / Rec.709 (legacy, no tone mapping)"
+      },
+      {
+        "name": "ocio://cg-config-v1.0.0_aces-v1.3_ocio-v2.1",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v1.0.0] [ACES v1.3] [OCIO v2.1]"
+      },
+      {
+        "name": "ocio://cg-config-v2.1.0_aces-v1.3_ocio-v2.3",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v2.0.0] [ACES v1.3] [OCIO v2.3]"
+      },
+      {
+        "name": "ocio://cg-config-v2.2.0_aces-v1.3_ocio-v2.4",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v2.2.0] [ACES v1.3] [OCIO v2.4]"
+      },
+      {
+        "name": "ocio://cg-config-v4.0.0_aces-v2.0_ocio-v2.5",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v4.0.0] [ACES v2.0] [OCIO v2.5]"
+      },
+      {
+        "name": "ocio://cg-config-v5.0.0_aces-v2.1_ocio-v2.6",
+        "recommended": true,
+        "uiName": "Academy Color Encoding System - CG Config [COLORSPACES v5.0.0] [ACES v2.1] [OCIO v2.6]"
+      },
+      {
+        "name": "ocio://studio-config-v1.0.0_aces-v1.3_ocio-v2.1",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v1.0.0] [ACES v1.3] [OCIO v2.1]"
+      },
+      {
+        "name": "ocio://studio-config-v2.1.0_aces-v1.3_ocio-v2.3",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v2.0.0] [ACES v1.3] [OCIO v2.3]"
+      },
+      {
+        "name": "ocio://studio-config-v2.2.0_aces-v1.3_ocio-v2.4",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v2.2.0] [ACES v1.3] [OCIO v2.4]"
+      },
+      {
+        "name": "ocio://studio-config-v4.0.0_aces-v2.0_ocio-v2.5",
+        "recommended": false,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v4.0.0] [ACES v2.0] [OCIO v2.5]"
+      },
+      {
+        "name": "ocio://studio-config-v5.0.0_aces-v2.1_ocio-v2.6",
+        "recommended": true,
+        "uiName": "Academy Color Encoding System - Studio Config [COLORSPACES v5.0.0] [ACES v2.1] [OCIO v2.6]"
+      }
+    ],
+    "colorSpaces": [
+      "sRGB - Display",
+      "Gamma 2.2 Rec.709 - Display",
+      "Display P3 - Display",
+      "Display P3 HDR - Display",
+      "Gamma 2.6 P3-D65 - Display",
+      "Rec.1886 Rec.709 - Display",
+      "Rec.2100-PQ - Display",
+      "ST2084-P3-D65 - Display",
+      "ACES2065-1",
+      "ACEScc",
+      "ACEScct",
+      "ACEScg",
+      "sRGB Encoded Rec.709 (sRGB)",
+      "Gamma 1.8 Encoded Rec.709",
+      "Gamma 2.2 Encoded Rec.709",
+      "Gamma 2.4 Encoded Rec.709",
+      "sRGB Encoded P3-D65",
+      "Gamma 2.2 Encoded AdobeRGB",
+      "sRGB Encoded AP1",
+      "Gamma 2.2 Encoded AP1",
+      "Linear AdobeRGB",
+      "Linear P3-D65",
+      "Linear Rec.2020",
+      "Linear Rec.709 (sRGB)",
+      "Raw"
+    ],
+    "display": "sRGB - Display",
+    "displays": [
+      "sRGB - Display",
+      "Display P3 - Display",
+      "Display P3 HDR - Display",
+      "Gamma 2.2 Rec.709 - Display",
+      "Gamma 2.6 P3-D65 - Display",
+      "Rec.1886 Rec.709 - Display",
+      "Rec.2100-PQ - Display",
+      "ST2084-P3-D65 - Display"
+    ],
+    "error": "",
+    "look": "",
+    "looks": [
+      "ACES 1.3 Reference Gamut Compression"
+    ],
+    "name": "cg-config-v5.0.0_aces-v2.1_ocio-v2.6",
+    "ok": true,
+    "sceneLinear": "ACEScg",
+    "source": "ocio://cg-config-latest",
+    "version": "2.6.0",
+    "view": "ACES 2.0 - SDR 100 nits (Rec.709)",
+    "views": [
+      "ACES 2.0 - SDR 100 nits (Rec.709)",
+      "Un-tone-mapped",
+      "Video (colorimetric)",
+      "Raw"
+    ]
+  },
+  "snapshot": {
+    "centerBGRA": [
+      146,
+      140,
+      196,
+      255
+    ],
+    "height": 128,
+    "ok": true,
+    "path": "D:\\a\\_temp\\smoke-single.png",
+    "shaderError": "",
+    "width": 256
+  }
+}
+

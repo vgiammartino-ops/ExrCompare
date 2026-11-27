@@ -1,0 +1,149 @@
+-- Building for: Visual Studio 18 2026
+-- Running vcpkg install
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/Tools/MSVC/14.52.37025/bin/Hostx64/x64/cl.exe
+Detecting compiler hash for triplet x64-windows-static-md...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/Tools/MSVC/14.52.37025/bin/Hostx64/x64/cl.exe
+The following packages will be built and installed:
+  * bzip2[core,tool]:x64-windows-static-md@1.0.8#6
+  * expat:x64-windows-static-md@2.11.0
+    imath:x64-windows-static-md@3.2.3#1
+  * libdeflate[compression,core,decompression,gzip,zlib]:x64-windows-static-md@1.26
+  * liblzma:x64-windows-static-md@5.8.4
+  * minizip-ng[bzip2,core,lzma,pkcrypt,wzaes,zlib,zstd]:x64-windows-static-md@4.1.0
+    nlohmann-json:x64-windows-static-md@3.12.0#2
+    opencolorio:x64-windows-static-md@2.6.0
+    openexr:x64-windows-static-md@3.5.5
+  * openjph:x64-windows-static-md@0.32.0#1
+  * pystring:x64-windows-static-md@1.2.0
+  * vcpkg-cmake:x64-windows@2026-11-09
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+  * yaml-cpp:x64-windows-static-md@0.9.0#1
+  * zlib:x64-windows-static-md@1.4
+  * zstd:x64-windows-static-md@1.5.7
+Additional packages (*) will be modified to complete this operation.
+Restored 16 package(s) from D:\a\ExrCompare\ExrCompare\vcpkg-cache in 2.1 s. Use --debug to see more details.
+Installing 1/16 vcpkg-cmake-config:x64-windows@2026-07-21...
+vcpkg-cmake-config:x64-windows@2026-07-21 package ABI: 52b9e71c02c8b7f51c1f0033288241632fb9ee196d6568bffdbc272a95388612
+Elapsed time to handle vcpkg-cmake-config:x64-windows: 16.8 ms
+Installing 2/16 vcpkg-cmake:x64-windows@2026-11-09...
+vcpkg-cmake:x64-windows@2026-11-09 package ABI: a5268744a8073d3e74211092000bafd1edfa7df87b8f430ce133d3f1cb722f5e
+Elapsed time to handle vcpkg-cmake:x64-windows: 47.4 ms
+Installing 3/16 imath:x64-windows-static-md@3.2.3#1...
+imath:x64-windows-static-md@3.2.3#1 package ABI: 84cee869930280067c1f7a9d92d011e91575085ed3a60e514cfd2e010ac35187
+Elapsed time to handle imath:x64-windows-static-md: 42.1 ms
+Installing 4/16 nlohmann-json:x64-windows-static-md@3.12.0#2...
+nlohmann-json:x64-windows-static-md@3.12.0#2 package ABI: b41efd1ffd27579696ac2e76385d23dcd672b5277125b79465a3886297950ec9
+Elapsed time to handle nlohmann-json:x64-windows-static-md: 21.5 ms
+Installing 5/16 yaml-cpp:x64-windows-static-md@0.9.0#1...
+yaml-cpp:x64-windows-static-md@0.9.0#1 package ABI: a2fd55bce11797c8ddba4efc3301d032ec102991c1b6ae89290d403158cfd89c
+Elapsed time to handle yaml-cpp:x64-windows-static-md: 31.6 ms
+Installing 6/16 pystring:x64-windows-static-md@1.2.0...
+pystring:x64-windows-static-md@1.2.0 package ABI: e531eaaf49559a0403cc06febdacda3979cccc0e7ce97c08e5e4cdbd4f9ad5e6
+Elapsed time to handle pystring:x64-windows-static-md: 31.3 ms
+Installing 7/16 zstd:x64-windows-static-md@1.5.7...
+zstd:x64-windows-static-md@1.5.7 package ABI: d4ea53d39a5dd9feb7820e7ab54491c221e8b812788619cb3a4b51070fa9af46
+Elapsed time to handle zstd:x64-windows-static-md: 15.9 ms
+Installing 8/16 zlib:x64-windows-static-md@1.4...
+zlib:x64-windows-static-md@1.4 package ABI: 6da5ea8c998589512dc958aac7af54275f788e1817e64c128b7d8defbeada768
+Elapsed time to handle zlib:x64-windows-static-md: 31.7 ms
+Installing 9/16 liblzma:x64-windows-static-md@5.8.4...
+liblzma:x64-windows-static-md@5.8.4 package ABI: 4689b624012e0ff458fc14640d62e016dcb8a658994e293db754e3cca622bbc7
+Elapsed time to handle liblzma:x64-windows-static-md: 47.5 ms
+Installing 10/16 bzip2[core,tool]:x64-windows-static-md@1.0.8#6...
+bzip2[core,tool]:x64-windows-static-md@1.0.8#6 package ABI: 33996dc3eccc1e4dfe637c0ef3bd48aa9657a69736a00b28907ce1a53e67f3d3
+Elapsed time to handle bzip2:x64-windows-static-md: 31.7 ms
+Installing 11/16 minizip-ng[bzip2,core,lzma,pkcrypt,wzaes,zlib,zstd]:x64-windows-static-md@4.1.0...
+minizip-ng[bzip2,core,lzma,pkcrypt,wzaes,zlib,zstd]:x64-windows-static-md@4.1.0 package ABI: e509a799aac5e6f56634eea5cf8a5c3d1ff271cb17480f0267d0f0bb18e966df
+Elapsed time to handle minizip-ng:x64-windows-static-md: 48.4 ms
+Installing 12/16 expat:x64-windows-static-md@2.11.0...
+expat:x64-windows-static-md@2.11.0 package ABI: a59089101a5f249179bb7d9b98d97b2c8c8735682134e8d70831ed03d81cb653
+Elapsed time to handle expat:x64-windows-static-md: 14.8 ms
+Installing 13/16 opencolorio:x64-windows-static-md@2.6.0...
+opencolorio:x64-windows-static-md@2.6.0 package ABI: 8d799cb13d554ab61ed44ba4ee51127afb70752169e5f76a9e75aafe4907d851
+Elapsed time to handle opencolorio:x64-windows-static-md: 31.4 ms
+Installing 14/16 openjph:x64-windows-static-md@0.32.0#1...
+openjph:x64-windows-static-md@0.32.0#1 package ABI: 7524e13ce0790afe705ea561879090e439fce7a62784ab5d2091cf1375d2cde9
+Elapsed time to handle openjph:x64-windows-static-md: 31.7 ms
+Installing 15/16 libdeflate[compression,core,decompression,gzip,zlib]:x64-windows-static-md@1.26...
+libdeflate[compression,core,decompression,gzip,zlib]:x64-windows-static-md@1.26 package ABI: b951413c0c88e9280a90f0f619b7f4df84e46d460f2e1ddc03530bbc0caa7305
+Elapsed time to handle libdeflate:x64-windows-static-md: 32.3 ms
+Installing 16/16 openexr:x64-windows-static-md@3.5.5...
+openexr:x64-windows-static-md@3.5.5 package ABI: a69c15402146e60c331a0c636e3333af96257531251c64dda728f2c391e727d1
+Elapsed time to handle openexr:x64-windows-static-md: 46.8 ms
+Installed contents are licensed to you by owners. Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
+Packages installed in this vcpkg installation declare the following licenses:
+(BSD-3-Clause OR GPL-2.0-only)
+0BSD
+BSD-2-Clause
+BSD-3-Clause
+CC0-1.0
+MIT
+Zlib
+bzip2-1.0.6
+imath provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(Imath CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE Imath::Imath Imath::Config Imath::ImathConfig)
+
+imath provides pkg-config modules:
+
+  # Imath library: vector/matrix and math operations, plus the half type.
+  Imath
+
+The package nlohmann-json provides CMake targets:
+
+    find_package(nlohmann_json CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE nlohmann_json::nlohmann_json)
+
+The package nlohmann-json can be configured to not provide implicit conversions via a custom triplet file:
+
+    set(nlohmann-json_IMPLICIT_CONVERSIONS OFF)
+
+For more information, see the docs here:
+    
+    https://json.nlohmann.me/api/macros/json_use_implicit_conversions/
+
+opencolorio provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(OpenColorIO CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE yaml-cpp::yaml-cpp OpenColorIO::OpenColorIO)
+
+opencolorio provides pkg-config modules:
+
+  # OpenColorIO (OCIO) is a complete color management solution
+  OpenColorIO
+
+openexr provides CMake targets:
+
+    find_package(OpenEXR CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE OpenEXR::OpenEXR)
+
+All requested installations completed successfully in: 533 ms
+-- Running vcpkg install - done
+-- The CXX compiler identification is MSVC 19.52.37029.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/Tools/MSVC/14.52.37025/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Failed
+-- Looking for pthread_create in pthreads
+-- Looking for pthread_create in pthreads - not found
+-- Looking for pthread_create in pthread
+-- Looking for pthread_create in pthread - not found
+-- Found Threads: TRUE
+-- Found ZLIB: optimized;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/lib/libzs.lib;debug;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/debug/lib/libzsd.lib (found suitable version "1.4", minimum required is "1.4")
+-- Found ZLIB: optimized;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/lib/libzs.lib;debug;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/debug/lib/libzsd.lib (found version "1.4")
+-- Found BZip2: optimized;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/lib/bz2.lib;debug;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/debug/lib/bz2d.lib (found version "1.0.8")
+-- Looking for BZ2_bzCompressInit
+-- Looking for BZ2_bzCompressInit - found
+-- Found LibLZMA: optimized;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/lib/lzma.lib;debug;D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/debug/lib/lzma.lib (found version "5.8.4")
+-- Found OpenColorIO: D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/share/opencolorio/OpenColorIOConfig.cmake (found version "2.6.0")
+-- Found nlohmann_json: D:/a/ExrCompare/ExrCompare/build/native-build/vcpkg_installed/x64-windows-static-md/share/nlohmann_json/nlohmann_jsonConfig.cmake (found version "3.12.0")
+-- Configuring done (40.6s)
+-- Generating done (0.1s)
+-- Build files have been written to: D:/a/ExrCompare/ExrCompare/build/native-build

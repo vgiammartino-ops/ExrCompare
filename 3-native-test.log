@@ -1,0 +1,96 @@
+UpdateCTestConfiguration  from :D:/a/ExrCompare/ExrCompare/build/native-build/DartConfiguration.tcl
+Test project D:/a/ExrCompare/ExrCompare/build/native-build
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 1
+    Start 1: exrc_tests
+
+1: Test command: D:\a\ExrCompare\ExrCompare\build\native-build\Release\exrc_tests.exe
+1: Working Directory: D:/a/ExrCompare/ExrCompare/build/native-build
+1: Test timeout computed to be: 10000000
+1: [ RUN  ] parseFrameName splits on the last digit run
+1: [  OK  ] parseFrameName splits on the last digit run
+1: [ RUN  ] scanSequence finds range, padding and missing frames
+1: [  OK  ] scanSequence finds range, padding and missing frames
+1: [ RUN  ] version siblings are found in versioned folders and names
+1: [  OK  ] version siblings are found in versioned folders and names
+1: [ RUN  ] Rational frame rates
+1: [  OK  ] Rational frame rates
+1: [ RUN  ] AOV kinds are classified from names
+1: [  OK  ] AOV kinds are classified from names
+1: [ RUN  ] buildLayers groups single-part AOVs and puts the beauty first
+1: [  OK  ] buildLayers groups single-part AOVs and puts the beauty first
+1: [ RUN  ] stereo: multi-view channels and multi-part views are filtered by view
+1: [  OK  ] stereo: multi-view channels and multi-part views are filtered by view
+1: [ RUN  ] decodeFrame: colour as half, data as float, greyscale as one channel
+1: [  OK  ] decodeFrame: colour as half, data as float, greyscale as one channel
+1: [ RUN  ] decodeFrame: alpha override and data window placement
+1: [  OK  ] decodeFrame: alpha override and data window placement
+1: [ RUN  ] proxy: box filter for scanline files, mip level 1 for tiled files
+1: [  OK  ] proxy: box filter for scanline files, mip level 1 for tiled files
+1: [ RUN  ] metadata and cryptomatte manifests are read from the header
+1: [  OK  ] metadata and cryptomatte manifests are read from the header
+1: [ RUN  ] unreadable files become missing frames instead of throwing
+1: [  OK  ] unreadable files become missing frames instead of throwing
+1: [ RUN  ] FrameCache: two active layers, eviction behind the playhead, inactive keys first
+1: [  OK  ] FrameCache: two active layers, eviction behind the playhead, inactive keys first
+1: [ RUN  ] Realtime playback at 23.976 has no drift; loop and stop
+1: [  OK  ] Realtime playback at 23.976 has no drift; loop and stop
+1: [ RUN  ] compare layout: overlap, fit/pixel align, side by side, over/under
+1: [  OK  ] compare layout: overlap, fit/pixel align, side by side, over/under
+1: [ RUN  ] rebuild sum / difference and contact sheet
+1: [  OK  ] rebuild sum / difference and contact sheet
+1: [ RUN  ] Waveform: stops scale, rows, display light and CPU reference
+1: [  OK  ] Waveform: stops scale, rows, display light and CPU reference
+1: [ RUN  ] Session: open A and B, AOV lock, compare modes, render state
+1:   call failed: {"cmd":"compare","mode":"nope"} -> {"error":"Unknown compare mode","ok":false}
+1: [  OK  ] Session: open A and B, AOV lock, compare modes, render state
+1: [ RUN  ] Session: transport, offsets, probe, stats, metadata
+1: [  OK  ] Session: transport, offsets, probe, stats, metadata
+1: [ RUN  ] Session: contact sheet, rebuild check, proxy, cache modes, versions, swap, OCIO
+1:   call failed: {"cmd":"version","delta":1,"slot":0} -> {"error":"No newer version found","ok":false}
+1:   call failed: {"cmd":"ocio_load","path":"/no/such/config.ocio"} -> {"error":"/no/such/config.ocio: '/no/such/config.ocio' file does not exist.","ok":false}
+1:   call failed: {"cmd":"bogus"} -> {"error":"Unknown command: bogus","ok":false}
+1: [  OK  ] Session: contact sheet, rebuild check, proxy, cache modes, versions, swap, OCIO
+1: [ RUN  ] OCIO: inline config lists displays, views, looks and colour spaces
+1: [  OK  ] OCIO: inline config lists displays, views, looks and colour spaces
+1: [ RUN  ] OCIO: HLSL generated for input and display; CPU path matches the sRGB curve
+1: [  OK  ] OCIO: HLSL generated for input and display; CPU path matches the sRGB curve
+1: [ RUN  ] OCIO: built-in ACES config loads when this OCIO has it
+1:   default config: cg-config-v5.0.0_aces-v2.1_ocio-v2.6, display sRGB - Display / ACES 2.0 - SDR 100 nits (Rec.709), 2 LUT textures
+1: [  OK  ] OCIO: built-in ACES config loads when this OCIO has it
+1: [ RUN  ] OCIO: legacy linear sRGB / Rec.709 workflow (no tone mapping)
+1: [OpenColorIO Error]: The compositing_log role is required for a config version 2.2 or higher.
+1: [OpenColorIO Error]: The color_timing role is required for a config version 2.2 or higher.
+1: [OpenColorIO Error]: The aces_interchange role is required when there are scene-referred color spaces and the config version is 2.2 or higher.
+1: [  OK  ] OCIO: legacy linear sRGB / Rec.709 workflow (no tone mapping)
+1: 
+1: 24 tests, 0 failed checks
+1/2 Test #1: exrc_tests .......................   Passed    0.16 sec
+test 2
+    Start 2: exrcore_render_test
+
+2: Test command: D:\a\ExrCompare\ExrCompare\build\native-build\Release\exrcore_render_test.exe
+2: Working Directory: D:/a/ExrCompare/ExrCompare/build/native-build
+2: Test timeout computed to be: 10000000
+2: OCIO 2.6.0, config: cg-config-v5.0.0_aces-v2.1_ocio-v2.6 (ocio://cg-config-latest), display sRGB - Display / ACES 2.0 - SDR 100 nits (Rec.709)
+2: a centre BGRA [65,65,66,255]
+2: b centre BGRA [66,63,89,255]
+2: wipe centre BGRA [66,63,89,255]
+2: stack centre BGRA [66,63,89,255]
+2: difference centre BGRA [0,5,71,255]
+2: sidebyside centre BGRA [66,63,88,255]
+2: overunder centre BGRA [66,63,89,255]
+2: waveform stops8: 8192 samples, columns match 1, max CDF gap 0, peak GPU 0.509766 CPU 0.509766
+2: waveform linear1: 8192 samples, columns match 1, max CDF gap 0, peak GPU 0.509766 CPU 0.509766
+2: 37 display/view combinations compiled and rendered
+2: OK (0 failures)
+2/2 Test #2: exrcore_render_test ..............   Passed   26.77 sec
+
+100% tests passed out of 2
+
+Total Test time (real) =  26.98 sec

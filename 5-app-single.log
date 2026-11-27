@@ -1,0 +1,12 @@
+  Determining projects to restore...
+  Restored D:\a\ExrCompare\ExrCompare\app\ExrCompare\ExrCompare.csproj (in 408 ms).
+  ExrCompare -> D:\a\ExrCompare\ExrCompare\app\ExrCompare\bin\x64\Release\net10.0-windows10.0.19041.0\win-x64\ExrCompare.dll
+C:\Program Files\dotnet\sdk\11.0.100\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.Publish.targets(1345,5): warning NETSDK1244: 'IncludeAllContentForSelfExtract' enables a legacy compatibility mode that extracts all managed assemblies to disk at startup. Prefer the default in-memory single-file behavior by removing the 'IncludeAllContentForSelfExtract' property from your project. [D:\a\ExrCompare\ExrCompare\app\ExrCompare\ExrCompare.csproj]
+  ExrCompare -> D:\a\ExrCompare\ExrCompare\build\publish\single\
+
+Name             Length
+----             ------
+ExrCompare.exe 98249752
+ExrCompare.pdb    97080
+
+
